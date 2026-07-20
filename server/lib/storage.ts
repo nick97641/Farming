@@ -4,7 +4,15 @@ import type { Dirent } from 'node:fs'
 import path from 'node:path'
 
 import { ProjectSchema, createEmptyProject, type Project } from '../../shared/schema/project.ts'
-import { getAllAssetDirs, getExportsDir, getProjectDir, getProjectFilePath, getProjectsRoot } from './paths.ts'
+import {
+  getAllAssetDirs,
+  getExportsDir,
+  getGeneratedImagesDir,
+  getImportedImagesDir,
+  getProjectDir,
+  getProjectFilePath,
+  getProjectsRoot,
+} from './paths.ts'
 import { normalizeLegacyProject } from './project-migration.ts'
 
 export class ProjectNotFoundError extends Error {
@@ -57,6 +65,12 @@ async function scaffoldProjectFolders(projectId: string): Promise<void> {
   for (const dir of getAllAssetDirs(projectId)) {
     await mkdir(dir, { recursive: true })
   }
+  // Existing projects created before this checkpoint don't have these two
+  // subfolders — the import route creates them lazily on first use instead of
+  // this migration/read path touching disk, matching how this file never
+  // otherwise mutates the filesystem outside project creation.
+  await mkdir(getImportedImagesDir(projectId), { recursive: true })
+  await mkdir(getGeneratedImagesDir(projectId), { recursive: true })
 }
 
 // Validates before writing anything to disk, then writes to a temp file in the

@@ -169,6 +169,88 @@ test('normalizeLegacyProject drops a malformed designBrief (missing sourceIdeaId
   assert.equal(normalized.designBrief, null)
 })
 
+test('normalizeLegacyProject defaults imageJobs to an empty array when the field is missing entirely', () => {
+  const raw = { id: 'legacy-11', research: {}, ideas: [] }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: unknown }
+  assert.deepEqual(normalized.imageJobs, [])
+})
+
+test('normalizeLegacyProject backfills a partial image job while preserving its existing values', () => {
+  const raw = {
+    id: 'legacy-12',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-old', label: 'Cover art', prompt: 'a lettuce bucket system' }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+
+  assert.equal(job.id, 'job-old')
+  assert.equal(job.label, 'Cover art')
+  assert.equal(job.prompt, 'a lettuce bucket system')
+  assert.equal(job.purpose, 'custom')
+  assert.equal(job.status, 'draft')
+  assert.equal(job.sourceType, 'imported')
+  assert.equal(job.width, 1024)
+  assert.equal(job.height, 1024)
+  assert.equal(job.output, null)
+  assert.equal(job.sourceDesignBriefUpdatedAt, null)
+
+  const validated = ProjectSchema.shape.imageJobs.element.safeParse(job)
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject drops an image job entry that has no valid id', () => {
+  const raw = { id: 'legacy-13', research: {}, ideas: [], imageJobs: [{ label: 'no id here' }, { id: 'job-kept' }] }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  assert.equal(normalized.imageJobs.length, 1)
+  assert.equal(normalized.imageJobs[0].id, 'job-kept')
+})
+
+test('normalizeLegacyProject preserves a structurally valid existing image job output unchanged', () => {
+  const output = {
+    fileName: 'job-approved-abcdef.png',
+    relativePath: 'assets/images/imported/job-approved-abcdef.png',
+    generatedAt: '2024-01-02T00:00:00.000Z',
+  }
+  const raw = {
+    id: 'legacy-14',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-approved',
+        sourceDesignBriefUpdatedAt: null,
+        purpose: 'youtube-thumbnail',
+        label: 'Main thumbnail',
+        status: 'completed',
+        prompt: 'a lettuce bucket system',
+        negativePrompt: '',
+        width: 1280,
+        height: 720,
+        sourceType: 'imported',
+        output,
+        originalFilename: 'photo.png',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-02T00:00:00.000Z',
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  assert.deepEqual(normalized.imageJobs[0].output, output)
+})
+
+test('normalizeLegacyProject drops a malformed image job output (missing a required field) back to null', () => {
+  const raw = {
+    id: 'legacy-15',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-bad-output', output: { fileName: 'x.png' } }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  assert.equal(normalized.imageJobs[0].output, null)
+})
+
 let dataDir: string
 
 before(async () => {
@@ -287,5 +369,6 @@ test('readProject loads a project.json written before selectedIdeaId or designBr
   const loaded = await readProject(projectId)
   assert.equal(loaded.selectedIdeaId, null)
   assert.equal(loaded.designBrief, null)
+  assert.deepEqual(loaded.imageJobs, [])
   assert.ok(ProjectSchema.safeParse(loaded).success)
 })

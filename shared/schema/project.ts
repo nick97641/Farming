@@ -199,6 +199,59 @@ export const DesignBriefSchema = z.object({
 })
 export type DesignBrief = z.infer<typeof DesignBriefSchema>
 
+export const FileRefSchema = z.object({
+  fileName: z.string(),
+  relativePath: z.string(),
+  generatedAt: z.string(),
+})
+export type FileRef = z.infer<typeof FileRefSchema>
+
+export const ImageJobPurposeSchema = z.enum([
+  'pdf-cover',
+  'internal-illustration',
+  'worksheet-graphic',
+  'youtube-thumbnail',
+  'pinterest-image',
+  'custom',
+])
+export type ImageJobPurpose = z.infer<typeof ImageJobPurposeSchema>
+
+// Checkpoint A only — no code path can produce anything beyond these three;
+// 'generating'/'failed' are added once Checkpoint B's real execution exists.
+export const ImageJobStatusSchema = z.enum(['draft', 'ready', 'completed'])
+export type ImageJobStatus = z.infer<typeof ImageJobStatusSchema>
+
+// Only 'imported' is reachable until Checkpoint B adds direct generation.
+export const ImageJobSourceTypeSchema = z.enum(['generated', 'imported'])
+export type ImageJobSourceType = z.infer<typeof ImageJobSourceTypeSchema>
+
+// An ImageJob is an editable production artifact, not a live view of the
+// Design Brief: sourceDesignBriefUpdatedAt is only a staleness signal
+// (compared against the live brief's updatedAt at display time), never a
+// copy of its content — prompt/negativePrompt are the job's own authored
+// text and must never silently follow later brief edits. Once `output` is
+// set the job is immutable; another attempt means duplicating the job, not
+// reusing or overwriting this one. "Missing file" is deliberately not a
+// status here — it's a display-time fact about the filesystem, checked by
+// the client, never persisted.
+export const ImageJobSchema = z.object({
+  id: z.string(),
+  sourceDesignBriefUpdatedAt: z.string().nullable(),
+  purpose: ImageJobPurposeSchema,
+  label: z.string(),
+  status: ImageJobStatusSchema,
+  prompt: z.string(),
+  negativePrompt: z.string(),
+  width: z.number(),
+  height: z.number(),
+  sourceType: ImageJobSourceTypeSchema,
+  output: FileRefSchema.nullable(),
+  originalFilename: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type ImageJob = z.infer<typeof ImageJobSchema>
+
 export const ShortSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -241,13 +294,6 @@ export const ContentSchema = z.object({
 })
 export type Content = z.infer<typeof ContentSchema>
 
-export const FileRefSchema = z.object({
-  fileName: z.string(),
-  relativePath: z.string(),
-  generatedAt: z.string(),
-})
-export type FileRef = z.infer<typeof FileRefSchema>
-
 export const ProductsSchema = z.object({
   pdfGuide: FileRefSchema.nullable(),
   template: FileRefSchema.nullable(),
@@ -276,6 +322,7 @@ export const ProjectSchema = z.object({
   ideas: z.array(IdeaSchema),
   selectedIdeaId: z.string().nullable(),
   designBrief: DesignBriefSchema.nullable(),
+  imageJobs: z.array(ImageJobSchema),
   content: ContentSchema,
   products: ProductsSchema,
   assets: z.array(AssetSchema),
@@ -313,6 +360,7 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
     ideas: [],
     selectedIdeaId: null,
     designBrief: null,
+    imageJobs: [],
     content: {
       longFormScript: '',
       shorts: [],

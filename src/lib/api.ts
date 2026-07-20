@@ -59,3 +59,27 @@ export async function generateIdeas(projectId: string, count: number): Promise<I
   })
   return result.ideas
 }
+
+export function getImageJobFileUrl(projectId: string, jobId: string): string {
+  return `${API_BASE}/projects/${projectId}/image-jobs/${jobId}/file`
+}
+
+// Raw-body upload, not routed through request() — the body is the file's own
+// bytes with its own Content-Type, not JSON.
+export async function importImageJobFile(projectId: string, jobId: string, file: File): Promise<Project> {
+  const url = `${API_BASE}/projects/${projectId}/image-jobs/${jobId}/import?filename=${encodeURIComponent(file.name)}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error((body as { error?: string } | null)?.error ?? `Import failed with status ${response.status}`)
+  }
+  return (await response.json()) as Project
+}
+
+export function deleteImageJob(projectId: string, jobId: string): Promise<Project> {
+  return request(`/projects/${projectId}/image-jobs/${jobId}`, { method: 'DELETE' })
+}

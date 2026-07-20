@@ -3,6 +3,9 @@ import {
   DesignBriefStatusSchema,
   IdeaContentTypeSchema,
   IdeaStatusSchema,
+  ImageJobPurposeSchema,
+  ImageJobSourceTypeSchema,
+  ImageJobStatusSchema,
 } from '../../shared/schema/project.ts'
 
 type PlainRecord = Record<string, unknown>
@@ -15,6 +18,9 @@ const VALID_CONTENT_TYPES = new Set<string>(IdeaContentTypeSchema.options)
 const VALID_IDEA_STATUSES = new Set<string>(IdeaStatusSchema.options)
 const VALID_CONFIDENCE_LEVELS = new Set<string>(ConfidenceSchema.options)
 const VALID_DESIGN_BRIEF_STATUSES = new Set<string>(DesignBriefStatusSchema.options)
+const VALID_IMAGE_JOB_PURPOSES = new Set<string>(ImageJobPurposeSchema.options)
+const VALID_IMAGE_JOB_STATUSES = new Set<string>(ImageJobStatusSchema.options)
+const VALID_IMAGE_JOB_SOURCE_TYPES = new Set<string>(ImageJobSourceTypeSchema.options)
 
 // Upgrades an older flat string[] list (from before the confidence field
 // existed) into the current { text, confidence }[] shape. Anything already in
@@ -99,12 +105,52 @@ function normalizeDesignBrief(raw: unknown): unknown {
   }
 }
 
+// A FileRef only means something with all three fields present — a partial
+// one is dropped to null rather than repaired, same reasoning as a malformed
+// designBrief.
+function normalizeFileRef(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.fileName !== 'string' || typeof raw.relativePath !== 'string' || typeof raw.generatedAt !== 'string') {
+    return null
+  }
+  return { fileName: raw.fileName, relativePath: raw.relativePath, generatedAt: raw.generatedAt }
+}
+
+// An ImageJob with no valid id can't be addressed by any edit/delete/import
+// action, so unlike an idea's historical id-defaults-to-'' fallback, a job
+// missing its id is dropped from the array entirely rather than kept with a
+// fabricated one. Every other field is defensively coerced, matching this
+// file's normal approach for array items.
+function normalizeImageJob(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw.id !== 'string') return null
+
+  const now = new Date().toISOString()
+  const createdAt = typeof raw.createdAt === 'string' ? raw.createdAt : now
+  return {
+    id: raw.id,
+    sourceDesignBriefUpdatedAt: typeof raw.sourceDesignBriefUpdatedAt === 'string' ? raw.sourceDesignBriefUpdatedAt : null,
+    purpose: typeof raw.purpose === 'string' && VALID_IMAGE_JOB_PURPOSES.has(raw.purpose) ? raw.purpose : 'custom',
+    label: typeof raw.label === 'string' ? raw.label : '',
+    status: typeof raw.status === 'string' && VALID_IMAGE_JOB_STATUSES.has(raw.status) ? raw.status : 'draft',
+    prompt: typeof raw.prompt === 'string' ? raw.prompt : '',
+    negativePrompt: typeof raw.negativePrompt === 'string' ? raw.negativePrompt : '',
+    width: typeof raw.width === 'number' && Number.isFinite(raw.width) && raw.width > 0 ? raw.width : 1024,
+    height: typeof raw.height === 'number' && Number.isFinite(raw.height) && raw.height > 0 ? raw.height : 1024,
+    sourceType:
+      typeof raw.sourceType === 'string' && VALID_IMAGE_JOB_SOURCE_TYPES.has(raw.sourceType) ? raw.sourceType : 'imported',
+    output: normalizeFileRef(raw.output),
+    originalFilename: typeof raw.originalFilename === 'string' ? raw.originalFilename : null,
+    createdAt,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : createdAt,
+  }
+}
+
 // Fills in research fields introduced after a project.json may have first
 // been written (Phase 1 → Phase 2 → confidence field), and upgrades older
 // flat string arrays into their current shape, so previously saved projects
 // keep loading instead of being rejected as corrupt. Only touches `research`,
-// `ideas`, `selectedIdeaId`, and `designBrief`; every other top-level field is
-// passed through untouched.
+// `ideas`, `selectedIdeaId`, `designBrief`, and `imageJobs`; every other
+// top-level field is passed through untouched.
 export function normalizeLegacyProject(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
@@ -149,5 +195,8 @@ export function normalizeLegacyProject(raw: unknown): unknown {
     ideas,
     selectedIdeaId,
     designBrief: normalizeDesignBrief(raw.designBrief),
+    imageJobs: Array.isArray(raw.imageJobs)
+      ? raw.imageJobs.map(normalizeImageJob).filter((job): job is NonNullable<typeof job> => job !== null)
+      : [],
   }
 }

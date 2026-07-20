@@ -794,3 +794,37 @@ button:disabled {
   display: flex;
   gap: 8px;
 }
+
+.image-jobs-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.image-job-thumb {
+  display: block;
+  margin-top: 8px;
+  max-width: 220px;
+  max-height: 140px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.image-job-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.image-job-dimensions {
+  display: flex;
+  gap: 12px;
+}
+
+.image-job-dimensions .field {
+  flex: 1;
+}

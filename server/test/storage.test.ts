@@ -5,7 +5,8 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
-import type { Idea } from '../../shared/schema/project.ts'
+import { getGeneratedImagesDir, getImportedImagesDir } from '../lib/paths.ts'
+import type { Idea, ImageJob } from '../../shared/schema/project.ts'
 
 let dataDir: string
 
@@ -106,4 +107,44 @@ test('a selected approved idea and its designBrief persist unchanged through sav
   assert.ok(reloaded.designBrief)
   assert.equal(reloaded.designBrief?.sourceIdeaId, approvedIdea.id)
   assert.deepEqual(reloaded.designBrief?.contentRequirements, ['Step-by-step build instructions'])
+})
+
+test('creating a project scaffolds the imported/ and generated/ image subfolders', async () => {
+  await createProject({ id: 'image-folders-test', title: 'Test', topic: 'hydroponics' })
+
+  const importedEntries = await readdir(getImportedImagesDir('image-folders-test'))
+  const generatedEntries = await readdir(getGeneratedImagesDir('image-folders-test'))
+  assert.deepEqual(importedEntries, [])
+  assert.deepEqual(generatedEntries, [])
+})
+
+test('a completed image job with an output persists unchanged through save and reload', async () => {
+  const project = await createProject({ id: 'image-job-round-trip', title: 'Test', topic: 'hydroponics' })
+  const now = new Date().toISOString()
+  const job: ImageJob = {
+    id: 'job-1',
+    sourceDesignBriefUpdatedAt: now,
+    purpose: 'youtube-thumbnail',
+    label: 'Main thumbnail',
+    status: 'completed',
+    prompt: 'A bright DWC lettuce bucket system on a sunny windowsill',
+    negativePrompt: 'blurry, low quality',
+    width: 1280,
+    height: 720,
+    sourceType: 'imported',
+    output: {
+      fileName: 'job-1-abcdef123456.png',
+      relativePath: 'assets/images/imported/job-1-abcdef123456.png',
+      generatedAt: now,
+    },
+    originalFilename: 'my-thumbnail.png',
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  await writeProject({ ...project, imageJobs: [job] })
+
+  const reloaded = await readProject('image-job-round-trip')
+  assert.equal(reloaded.imageJobs.length, 1)
+  assert.deepEqual(reloaded.imageJobs[0], job)
 })

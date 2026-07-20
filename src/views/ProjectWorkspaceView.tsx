@@ -2,14 +2,17 @@ import { useEffect, useRef, useState } from 'react'
 
 import type { Idea, Project } from '../../shared/schema/project'
 import {
+  deleteImageJob as apiDeleteImageJob,
   deleteProject,
   generateIdeas as apiGenerateIdeas,
   getProject,
+  importImageJobFile as apiImportImageJobFile,
   organizeResearch as apiOrganizeResearch,
   saveProject,
 } from '../lib/api'
 import { DesignBriefTab } from './workspace/DesignBriefTab'
 import { IdeasTab } from './workspace/IdeasTab'
+import { ImageGenerationTab } from './workspace/ImageGenerationTab'
 import { OverviewTab } from './workspace/OverviewTab'
 import { ResearchTab } from './workspace/ResearchTab'
 
@@ -28,6 +31,7 @@ const TABS = [
   { id: 'research', label: 'Research', enabled: true },
   { id: 'ideas', label: 'Ideas', enabled: true },
   { id: 'brief', label: 'Design Brief', enabled: true },
+  { id: 'images', label: 'Image Generation', enabled: true },
   { id: 'content', label: 'Content', enabled: false },
   { id: 'assets', label: 'Assets', enabled: false },
   { id: 'products', label: 'Products', enabled: false },
@@ -46,6 +50,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [generatingIdeas, setGeneratingIdeas] = useState(false)
   const [generateIdeasError, setGenerateIdeasError] = useState<string | null>(null)
   const [pendingGeneratedIdeas, setPendingGeneratedIdeas] = useState<Idea[]>([])
+  const [importingImageJobId, setImportingImageJobId] = useState<string | null>(null)
+  const [importImageError, setImportImageError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
 
@@ -58,6 +64,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setOrganizeError(null)
     setGenerateIdeasError(null)
     setPendingGeneratedIdeas([])
+    setImportImageError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -159,6 +166,45 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
+  async function handleImportImageJobFile(jobId: string, file: File) {
+    if (!project) return
+    setImportingImageJobId(jobId)
+    setImportImageError(null)
+    try {
+      // Same reasoning as handleOrganize/handleGenerateIdeas: the import
+      // route reads the job from the persisted project server-side, so a
+      // job must already be saved (and any pending edits flushed) before it
+      // can be targeted.
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const updated = await apiImportImageJobFile(project.id, jobId, file)
+      skipNextSave.current = true
+      setProject(updated)
+    } catch (err) {
+      setImportImageError(err instanceof Error ? err.message : 'Failed to import image')
+    } finally {
+      setImportingImageJobId(null)
+    }
+  }
+
+  async function handleDeleteImageJob(jobId: string, label: string) {
+    if (!project) return
+    if (!window.confirm(`Delete "${label || 'this image job'}"? This cannot be undone.`)) return
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const updated = await apiDeleteImageJob(project.id, jobId)
+      skipNextSave.current = true
+      setProject(updated)
+    } catch (err) {
+      setImportImageError(err instanceof Error ? err.message : 'Failed to delete image job')
+    }
+  }
+
   if (loadError) {
     return (
       <div>
@@ -245,6 +291,18 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             selectedIdeaId={project.selectedIdeaId}
             designBrief={project.designBrief}
             onChangeDesignBrief={(designBrief) => updateProject((current) => ({ ...current, designBrief }))}
+          />
+        )}
+        {activeTab === 'images' && (
+          <ImageGenerationTab
+            projectId={project.id}
+            imageJobs={project.imageJobs}
+            designBrief={project.designBrief}
+            onChangeImageJobs={(imageJobs) => updateProject((current) => ({ ...current, imageJobs }))}
+            onImport={handleImportImageJobFile}
+            importingJobId={importingImageJobId}
+            importError={importImageError}
+            onDeleteJob={handleDeleteImageJob}
           />
         )}
       </div>
