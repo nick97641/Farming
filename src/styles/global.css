@@ -93,7 +93,149 @@ body {
   border-radius: 4px;
 }
 
-.app-placeholder {
+main {
   margin-top: 32px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.field input,
+.field textarea {
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  background: transparent;
+}
+
+.field textarea {
+  resize: vertical;
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 14px;
+}
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.danger-button {
+  color: var(--warn-text);
+  border-color: var(--warn-text);
+}
+
+.error-text {
+  color: var(--warn-text);
+}
+
+.new-project-form {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 32px;
+}
+
+.new-project-form h2 {
+  margin-top: 0;
+}
+
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.project-list-item {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.project-open-button {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  border: none;
+  border-radius: 0;
+}
+
+.project-title {
+  font-weight: 600;
+}
+
+.project-topic {
   color: var(--text-muted);
+  font-weight: 400;
+}
+
+.project-delete-button {
+  border: none;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  color: var(--warn-text);
+}
+
+.workspace-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.save-indicator {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.save-saving {
+  color: var(--text-muted);
+}
+
+.save-saved {
+  color: var(--ok-text);
+}
+
+.save-error {
+  color: var(--warn-text);
+}
+
+.research-workspace {
+  margin-top: 24px;
+}
+
+.workspace-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 32px;
 }

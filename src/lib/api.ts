@@ -1,20 +1,49 @@
+import type { Project } from '../../shared/schema/project'
+
 const API_BASE = '/api'
 
 export type HealthResponse = { status: string; timestamp: string }
 export type OllamaStatusResponse = { connected: true; version: string } | { connected: false; error: string }
 
-async function getJson<T>(path: string): Promise<T> {
-  const response = await fetch(`${API_BASE}${path}`)
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+  })
   if (!response.ok) {
-    throw new Error(`Request to ${path} failed with status ${response.status}`)
+    const body = await response.json().catch(() => null)
+    throw new Error((body as { error?: string } | null)?.error ?? `Request to ${path} failed with status ${response.status}`)
+  }
+  if (response.status === 204) {
+    return undefined as T
   }
   return (await response.json()) as T
 }
 
 export function getHealth(): Promise<HealthResponse> {
-  return getJson('/health')
+  return request('/health')
 }
 
 export function getOllamaStatus(): Promise<OllamaStatusResponse> {
-  return getJson('/ollama/status')
+  return request('/ollama/status')
+}
+
+export function listProjects(): Promise<Project[]> {
+  return request('/projects')
+}
+
+export function createProject(input: { title: string; topic: string }): Promise<Project> {
+  return request('/projects', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function getProject(id: string): Promise<Project> {
+  return request(`/projects/${id}`)
+}
+
+export function saveProject(project: Project): Promise<Project> {
+  return request(`/projects/${project.id}`, { method: 'PUT', body: JSON.stringify(project) })
+}
+
+export function deleteProject(id: string): Promise<void> {
+  return request(`/projects/${id}`, { method: 'DELETE' })
 }

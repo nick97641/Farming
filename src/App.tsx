@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 
 import { getHealth, getOllamaStatus, type OllamaStatusResponse } from './lib/api'
+import { ProjectsListView } from './views/ProjectsListView'
+import { ProjectWorkspaceView } from './views/ProjectWorkspaceView'
 
 type BackendState = 'checking' | 'online' | 'offline'
 
 function App() {
   const [backendState, setBackendState] = useState<BackendState>('checking')
   const [ollamaStatus, setOllamaStatus] = useState<OllamaStatusResponse | null>(null)
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null)
 
   useEffect(() => {
     getHealth()
@@ -47,8 +50,16 @@ function App() {
         </div>
       </section>
 
-      <main className="app-placeholder">
-        <p>Projects will appear here starting in Phase 1.</p>
+      <main>
+        {selectedProjectId ? (
+          <ProjectWorkspaceView
+            projectId={selectedProjectId}
+            onBack={() => setSelectedProjectId(null)}
+            onDeleted={() => setSelectedProjectId(null)}
+          />
+        ) : (
+          <ProjectsListView onOpenProject={setSelectedProjectId} />
+        )}
       </main>
     </div>
   )

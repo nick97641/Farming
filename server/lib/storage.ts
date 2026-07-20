@@ -1,9 +1,10 @@
-import { access, constants as fsConstants, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
+import { access, constants as fsConstants, mkdir, readFile, readdir, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
+import type { Dirent } from 'node:fs'
 import path from 'node:path'
 
 import { ProjectSchema, createEmptyProject, type Project } from '../../shared/schema/project.ts'
-import { getAllAssetDirs, getExportsDir, getProjectDir, getProjectFilePath } from './paths.ts'
+import { getAllAssetDirs, getExportsDir, getProjectDir, getProjectFilePath, getProjectsRoot } from './paths.ts'
 
 export class ProjectNotFoundError extends Error {
   constructor(projectId: string) {
@@ -118,4 +119,35 @@ export async function createProject(input: { id: string; title: string; topic: s
     await scaffoldProjectFolders(input.id)
     return atomicWriteProject(createEmptyProject(input))
   })
+}
+
+// Skips any project directory that fails to read/validate rather than failing
+// the whole list, so one corrupt project.json doesn't take down the list view.
+export async function listProjects(): Promise<Project[]> {
+  let entries: Dirent[]
+  try {
+    entries = await readdir(getProjectsRoot(), { withFileTypes: true })
+  } catch {
+    return []
+  }
+
+  const projects = await Promise.all(
+    entries
+      .filter((entry) => entry.isDirectory())
+      .map(async (entry) => {
+        try {
+          return await readProject(entry.name)
+        } catch {
+          return null
+        }
+      }),
+  )
+  return projects.filter((project): project is Project => project !== null)
+}
+
+export async function deleteProject(projectId: string): Promise<void> {
+  if (!(await pathExists(getProjectFilePath(projectId)))) {
+    throw new ProjectNotFoundError(projectId)
+  }
+  await rm(getProjectDir(projectId), { recursive: true, force: true })
 }
