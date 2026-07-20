@@ -1,0 +1,99 @@
+:root {
+  --text: #2b2b2b;
+  --text-muted: #6b6375;
+  --bg: #fdfdfb;
+  --border: #e5e4e7;
+  --accent: #3a7d44;
+  --ok-bg: rgba(58, 125, 68, 0.12);
+  --ok-text: #3a7d44;
+  --warn-bg: rgba(214, 90, 40, 0.12);
+  --warn-text: #b8460f;
+
+  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
+  color-scheme: light dark;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --text: #e5e4e7;
+    --text-muted: #9ca3af;
+    --bg: #16171d;
+    --border: #2e303a;
+    --accent: #6bbf78;
+    --ok-bg: rgba(107, 191, 120, 0.15);
+    --ok-text: #6bbf78;
+    --warn-bg: rgba(224, 122, 79, 0.15);
+    --warn-text: #e07a4f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.app-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.app-header h1 {
+  margin: 0 0 4px;
+  font-size: 28px;
+}
+
+.app-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.status-panel {
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+}
+
+.status-row + .status-row {
+  border-top: 1px solid var(--border);
+}
+
+.status-label {
+  font-weight: 600;
+}
+
+.status-value {
+  color: var(--text-muted);
+}
+
+.status-online .status-value {
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status-offline .status-value {
+  color: var(--warn-text);
+  background: var(--warn-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.app-placeholder {
+  margin-top: 32px;
+  color: var(--text-muted);
+}
