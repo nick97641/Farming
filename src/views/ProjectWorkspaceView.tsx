@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { Project } from '../../shared/schema/project'
-import { deleteProject, getProject, organizeResearch as apiOrganizeResearch, saveProject } from '../lib/api'
+import type { Idea, Project } from '../../shared/schema/project'
+import {
+  deleteProject,
+  generateIdeas as apiGenerateIdeas,
+  getProject,
+  organizeResearch as apiOrganizeResearch,
+  saveProject,
+} from '../lib/api'
+import { IdeasTab } from './workspace/IdeasTab'
 import { OverviewTab } from './workspace/OverviewTab'
 import { ResearchTab } from './workspace/ResearchTab'
 
@@ -18,7 +25,7 @@ const AUTOSAVE_DELAY_MS = 800
 const TABS = [
   { id: 'overview', label: 'Overview', enabled: true },
   { id: 'research', label: 'Research', enabled: true },
-  { id: 'ideas', label: 'Ideas', enabled: false },
+  { id: 'ideas', label: 'Ideas', enabled: true },
   { id: 'content', label: 'Content', enabled: false },
   { id: 'assets', label: 'Assets', enabled: false },
   { id: 'products', label: 'Products', enabled: false },
@@ -34,6 +41,9 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('overview')
   const [organizing, setOrganizing] = useState(false)
   const [organizeError, setOrganizeError] = useState<string | null>(null)
+  const [generatingIdeas, setGeneratingIdeas] = useState(false)
+  const [generateIdeasError, setGenerateIdeasError] = useState<string | null>(null)
+  const [pendingGeneratedIdeas, setPendingGeneratedIdeas] = useState<Idea[]>([])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
 
@@ -44,6 +54,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setSaveState('idle')
     setActiveTab('overview')
     setOrganizeError(null)
+    setGenerateIdeasError(null)
+    setPendingGeneratedIdeas([])
 
     getProject(projectId)
       .then(setProject)
@@ -125,6 +137,26 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
+  async function handleGenerateIdeas(count: number) {
+    if (!project) return
+    setGeneratingIdeas(true)
+    setGenerateIdeasError(null)
+    try {
+      // Same reasoning as handleOrganize: generation reads research from the
+      // persisted file server-side, so flush pending edits first.
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const drafts = await apiGenerateIdeas(project.id, count)
+      setPendingGeneratedIdeas(drafts)
+    } catch (err) {
+      setGenerateIdeasError(err instanceof Error ? err.message : 'Failed to generate ideas with AI')
+    } finally {
+      setGeneratingIdeas(false)
+    }
+  }
+
   if (loadError) {
     return (
       <div>
@@ -189,6 +221,18 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onOrganize={handleOrganize}
             organizing={organizing}
             organizeError={organizeError}
+          />
+        )}
+        {activeTab === 'ideas' && (
+          <IdeasTab
+            ideas={project.ideas}
+            research={project.research}
+            onChangeIdeas={(ideas) => updateProject((current) => ({ ...current, ideas }))}
+            pendingGeneratedIdeas={pendingGeneratedIdeas}
+            onChangePendingGeneratedIdeas={setPendingGeneratedIdeas}
+            onGenerate={handleGenerateIdeas}
+            generating={generatingIdeas}
+            generateError={generateIdeasError}
           />
         )}
       </div>

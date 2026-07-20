@@ -1,6 +1,12 @@
 import { z } from 'zod'
 
-import { ConfidentKeywordSetSchema, ConfidentTextSchema } from '../../shared/schema/project.ts'
+import {
+  ConfidenceSchema,
+  ConfidentKeywordSetSchema,
+  ConfidentTextSchema,
+  IdeaContentTypeSchema,
+  type Research,
+} from '../../shared/schema/project.ts'
 
 const OLLAMA_HOST = process.env.OLLAMA_HOST ?? 'http://localhost:11434'
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL ?? 'qwen2.5:14b-instruct'
@@ -133,4 +139,154 @@ export async function organizeResearch(input: {
     throw new OllamaOrganizeError('The AI response did not match the expected format')
   }
   return result.data
+}
+
+export class OllamaIdeaGenerationError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'OllamaIdeaGenerationError'
+  }
+}
+
+export const GeneratedIdeaSchema = z.object({
+  title: z.string(),
+  summary: z.string(),
+  contentType: IdeaContentTypeSchema,
+  targetAudience: z.string(),
+  problemSolved: z.string(),
+  proposedOutcome: z.string(),
+  differentiator: z.string(),
+  confidence: ConfidenceSchema,
+  notes: z.string(),
+  basedOn: z.array(z.string()),
+})
+export type GeneratedIdea = z.infer<typeof GeneratedIdeaSchema>
+
+export const GenerateIdeasResponseSchema = z.object({
+  ideas: z.array(GeneratedIdeaSchema),
+})
+export type GenerateIdeasResult = z.infer<typeof GenerateIdeasResponseSchema>
+
+const IDEA_SYSTEM_PROMPT = `You are a content and product idea generator for a gardening and hydroponics creator, working only from their own research.
+Do not invent statistics, market size, demand figures, pricing data, or trends that are not present in the research you are given.
+If an idea requires an assumption not directly supported by the research, say so explicitly in its "notes" field and lower its confidence accordingly.
+"confidence" must describe only how strongly the idea is supported by the given research — never factual accuracy, market validation, or verification.
+"contentType" must be exactly one of: youtube-video, short-form-video, pdf-guide, checklist, worksheet, template, course-lesson, blog-article, lead-magnet, other.
+Respond with only a single JSON object, no commentary, matching exactly this shape:
+{
+  "ideas": [
+    {
+      "title": string,
+      "summary": string,
+      "contentType": "youtube-video" | "short-form-video" | "pdf-guide" | "checklist" | "worksheet" | "template" | "course-lesson" | "blog-article" | "lead-magnet" | "other",
+      "targetAudience": string,
+      "problemSolved": string,
+      "proposedOutcome": string,
+      "differentiator": string,
+      "confidence": "high" | "medium" | "low",
+      "notes": string,
+      "basedOn": string[]
+    }
+  ]
+}
+"basedOn" should briefly cite which specific pieces of the given research support each idea (e.g. "audience problem: algae growth in reservoir").
+Produce at most the requested number of ideas.`
+
+export function buildGenerateIdeasPrompt(input: { topic: string; research: Research; count: number }): string {
+  const { topic, research, count } = input
+  const lines: string[] = [
+    `Project topic: ${topic.trim() || '(none provided)'}`,
+    `Requested number of ideas: ${count}`,
+    '',
+    'Manual notes:',
+    research.manualNotes.trim() || '(none provided)',
+    '',
+    'Pasted research:',
+    research.pastedResearch.trim() || '(none provided)',
+    '',
+    'AI-organized summary:',
+    research.organizedSummary.trim() || '(none provided)',
+  ]
+
+  const addConfidentTexts = (label: string, items: { text: string }[]) => {
+    if (items.length === 0) return
+    lines.push('', `${label}:`, ...items.map((item) => `- ${item.text}`))
+  }
+  const addPlainTexts = (label: string, items: string[]) => {
+    if (items.length === 0) return
+    lines.push('', `${label}:`, ...items.map((item) => `- ${item}`))
+  }
+
+  addConfidentTexts('Common questions', research.aiExtracted.commonQuestions)
+  addConfidentTexts('Beginner questions', research.aiExtracted.beginnerQuestions)
+  addConfidentTexts('Audience problems', research.aiExtracted.audienceProblems)
+  addConfidentTexts('Content gaps', research.aiExtracted.contentGaps)
+  addConfidentTexts('Estimated opportunities', research.aiExtracted.estimatedOpportunities)
+  addConfidentTexts('AI-suggested competitor / content angles', research.aiExtracted.competitorAngles)
+  addPlainTexts('User keywords (primary)', research.keywords.primary)
+  addPlainTexts('User keywords (secondary)', research.keywords.secondary)
+  addPlainTexts('User keywords (long-tail)', research.keywords.longTail)
+  addPlainTexts('User competitor / content angles', research.competitorAngles)
+  addPlainTexts(
+    'Verified facts',
+    research.verifiedFacts.map((fact) => fact.text),
+  )
+
+  return lines.join('\n')
+}
+
+// A single explicit request, no retries — mirrors organizeResearch. Never
+// writes anything; the caller decides what, if anything, to persist.
+export async function generateIdeas(input: {
+  topic: string
+  research: Research
+  count: number
+}): Promise<GeneratedIdea[]> {
+  let response: Response
+  try {
+    response = await fetch(`${OLLAMA_HOST}/api/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        system: IDEA_SYSTEM_PROMPT,
+        prompt: buildGenerateIdeasPrompt(input),
+        format: 'json',
+        stream: false,
+      }),
+      signal: AbortSignal.timeout(120_000),
+    })
+  } catch (error) {
+    throw new OllamaIdeaGenerationError(
+      `Could not reach Ollama at ${OLLAMA_HOST}: ${error instanceof Error ? error.message : 'unknown error'}`,
+    )
+  }
+
+  if (!response.ok) {
+    throw new OllamaIdeaGenerationError(`Ollama responded with status ${response.status}`)
+  }
+
+  let payload: { response?: string }
+  try {
+    payload = (await response.json()) as { response?: string }
+  } catch {
+    throw new OllamaIdeaGenerationError('Ollama returned a response that was not valid JSON')
+  }
+
+  if (typeof payload.response !== 'string') {
+    throw new OllamaIdeaGenerationError('Ollama response was missing the expected "response" field')
+  }
+
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(payload.response)
+  } catch {
+    throw new OllamaIdeaGenerationError('The AI response was not valid JSON and could not be parsed')
+  }
+
+  const result = GenerateIdeasResponseSchema.safeParse(parsed)
+  if (!result.success) {
+    throw new OllamaIdeaGenerationError('The AI response did not match the expected format')
+  }
+  return result.data.ideas.slice(0, input.count)
 }

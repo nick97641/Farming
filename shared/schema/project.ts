@@ -95,7 +95,63 @@ export const ResearchSchema = z.object({
 })
 export type Research = z.infer<typeof ResearchSchema>
 
+export const IdeaContentTypeSchema = z.enum([
+  'youtube-video',
+  'short-form-video',
+  'pdf-guide',
+  'checklist',
+  'worksheet',
+  'template',
+  'course-lesson',
+  'blog-article',
+  'lead-magnet',
+  'other',
+])
+export type IdeaContentType = z.infer<typeof IdeaContentTypeSchema>
+
+export const IdeaStatusSchema = z.enum(['draft', 'shortlisted', 'rejected', 'approved'])
+export type IdeaStatus = z.infer<typeof IdeaStatusSchema>
+
+// What part of the project's research a sourceResearch entry points at.
+// sourceLink/verifiedFact reuse the original item's real id. The list-based
+// kinds have no natural id in Phase 2's schema, so their referencedId is a
+// deterministic hash of (kind, text) computed on the frontend — stable for as
+// long as the item exists, since Phase 2's editors only ever add/remove these
+// items, never edit their text in place. aiCitation has no backing structured
+// item at all: it's the model's own free-text justification.
+export const IdeaSourceKindSchema = z.enum([
+  'commonQuestion',
+  'beginnerQuestion',
+  'audienceProblem',
+  'contentGap',
+  'estimatedOpportunity',
+  'userKeyword',
+  'aiSuggestedKeyword',
+  'userCompetitorAngle',
+  'aiSuggestedCompetitorAngle',
+  'verifiedFact',
+  'sourceLink',
+  'aiCitation',
+])
+export type IdeaSourceKind = z.infer<typeof IdeaSourceKindSchema>
+
+// A stable reference to a research item, not a copy of it. `text` is a cached
+// display copy only, kept so the UI can still show something meaningful if the
+// referenced item is later removed — availability is resolved at display time
+// by looking the referencedId up in the project's current research; a missing
+// match is shown as unavailable, never deleted from this list.
+export const IdeaSourceReferenceSchema = z.object({
+  id: z.string(),
+  kind: IdeaSourceKindSchema,
+  referencedId: z.string(),
+  text: z.string(),
+})
+export type IdeaSourceReference = z.infer<typeof IdeaSourceReferenceSchema>
+
 export const IdeaSchema = z.object({
+  // Original Phase 0 fields, unchanged and still required — preserved as-is
+  // for backward compatibility even though the Phase 3 UI doesn't populate
+  // hook/format/targetViewer/visualConcept/pdfOrTemplateOpportunity yet.
   id: z.string(),
   title: z.string(),
   hook: z.string(),
@@ -105,6 +161,18 @@ export const IdeaSchema = z.object({
   visualConcept: z.string(),
   pdfOrTemplateOpportunity: z.string(),
   createdAt: z.string(),
+
+  // Phase 3 additions.
+  summary: z.string(),
+  contentType: IdeaContentTypeSchema,
+  status: IdeaStatusSchema,
+  sourceResearch: z.array(IdeaSourceReferenceSchema),
+  targetAudience: z.string(),
+  proposedOutcome: z.string(),
+  differentiator: z.string(),
+  confidence: ConfidenceSchema,
+  notes: z.string(),
+  updatedAt: z.string(),
 })
 export type Idea = z.infer<typeof IdeaSchema>
 

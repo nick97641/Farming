@@ -1,4 +1,4 @@
-import type { Project } from '../../shared/schema/project'
+import type { Idea, Project } from '../../shared/schema/project'
 
 const API_BASE = '/api'
 
@@ -50,4 +50,12 @@ export function deleteProject(id: string): Promise<void> {
 
 export function organizeResearch(projectId: string): Promise<Project> {
   return request(`/projects/${projectId}/research/organize`, { method: 'POST' })
+}
+
+export async function generateIdeas(projectId: string, count: number): Promise<Idea[]> {
+  const result = await request<{ ideas: Idea[] }>(`/projects/${projectId}/ideas/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ count }),
+  })
+  return result.ideas
 }
