@@ -34,17 +34,62 @@ export const SourceLinkSchema = z.object({
 })
 export type SourceLink = z.infer<typeof SourceLinkSchema>
 
+// A fact the user has explicitly confirmed themselves, optionally citing a
+// source. There is no code path for Ollama to write into this list — treating
+// something as "verified" is a human action, never a model output.
+export const VerifiedFactSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  sourceId: z.string().nullable(),
+  addedAt: z.string(),
+})
+export type VerifiedFact = z.infer<typeof VerifiedFactSchema>
+
+// Keywords are classified by search intent so both the user's own list and the
+// AI's suggestions carry the same shape.
+export const KeywordSetSchema = z.object({
+  primary: z.array(z.string()),
+  secondary: z.array(z.string()),
+  longTail: z.array(z.string()),
+})
+export type KeywordSet = z.infer<typeof KeywordSetSchema>
+
+// Describes only how strongly an AI-extracted item is supported by the user's
+// own manual notes and pasted research — never factual certainty, market
+// accuracy, or source verification. Shown in the UI as "support confidence".
+export const ConfidenceSchema = z.enum(['high', 'medium', 'low'])
+export type Confidence = z.infer<typeof ConfidenceSchema>
+
+export const ConfidentTextSchema = z.object({
+  text: z.string(),
+  confidence: ConfidenceSchema,
+})
+export type ConfidentText = z.infer<typeof ConfidentTextSchema>
+
+export const ConfidentKeywordSetSchema = z.object({
+  primary: z.array(ConfidentTextSchema),
+  secondary: z.array(ConfidentTextSchema),
+  longTail: z.array(ConfidentTextSchema),
+})
+export type ConfidentKeywordSet = z.infer<typeof ConfidentKeywordSetSchema>
+
 // aiExtracted is structurally separate from the user-entered fields above it so
 // the UI can always label AI output as organized/estimated, never as verified fact.
 export const ResearchSchema = z.object({
   manualNotes: z.string(),
   pastedResearch: z.string(),
+  keywords: KeywordSetSchema,
+  competitorAngles: z.array(z.string()),
+  verifiedFacts: z.array(VerifiedFactSchema),
   organizedSummary: z.string(),
   aiExtracted: z.object({
-    commonQuestions: z.array(z.string()),
-    audienceProblems: z.array(z.string()),
-    contentGaps: z.array(z.string()),
-    estimatedOpportunities: z.array(z.string()),
+    commonQuestions: z.array(ConfidentTextSchema),
+    beginnerQuestions: z.array(ConfidentTextSchema),
+    audienceProblems: z.array(ConfidentTextSchema),
+    contentGaps: z.array(ConfidentTextSchema),
+    estimatedOpportunities: z.array(ConfidentTextSchema),
+    keywords: ConfidentKeywordSetSchema,
+    competitorAngles: z.array(ConfidentTextSchema),
   }),
   sources: z.array(SourceLinkSchema),
 })
@@ -158,12 +203,18 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
     research: {
       manualNotes: '',
       pastedResearch: '',
+      keywords: { primary: [], secondary: [], longTail: [] },
+      competitorAngles: [],
+      verifiedFacts: [],
       organizedSummary: '',
       aiExtracted: {
         commonQuestions: [],
+        beginnerQuestions: [],
         audienceProblems: [],
         contentGaps: [],
         estimatedOpportunities: [],
+        keywords: { primary: [], secondary: [], longTail: [] },
+        competitorAngles: [],
       },
       sources: [],
     },

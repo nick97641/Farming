@@ -47,3 +47,7 @@ export function saveProject(project: Project): Promise<Project> {
 export function deleteProject(id: string): Promise<void> {
   return request(`/projects/${id}`, { method: 'DELETE' })
 }
+
+export function organizeResearch(projectId: string): Promise<Project> {
+  return request(`/projects/${projectId}/research/organize`, { method: 'POST' })
+}

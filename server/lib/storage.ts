@@ -5,6 +5,7 @@ import path from 'node:path'
 
 import { ProjectSchema, createEmptyProject, type Project } from '../../shared/schema/project.ts'
 import { getAllAssetDirs, getExportsDir, getProjectDir, getProjectFilePath, getProjectsRoot } from './paths.ts'
+import { normalizeLegacyProject } from './project-migration.ts'
 
 export class ProjectNotFoundError extends Error {
   constructor(projectId: string) {
@@ -99,7 +100,7 @@ export async function readProject(projectId: string): Promise<Project> {
     throw new ProjectDataCorruptError(projectId, error)
   }
 
-  const result = ProjectSchema.safeParse(parsed)
+  const result = ProjectSchema.safeParse(normalizeLegacyProject(parsed))
   if (!result.success) {
     throw new ProjectDataCorruptError(projectId, result.error)
   }

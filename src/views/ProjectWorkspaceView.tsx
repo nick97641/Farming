@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 
 import type { Project } from '../../shared/schema/project'
-import { deleteProject, getProject, saveProject } from '../lib/api'
+import { deleteProject, getProject, organizeResearch as apiOrganizeResearch, saveProject } from '../lib/api'
+import { OverviewTab } from './workspace/OverviewTab'
+import { ResearchTab } from './workspace/ResearchTab'
 
 type Props = {
   projectId: string
@@ -13,10 +15,25 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 const AUTOSAVE_DELAY_MS = 800
 
+const TABS = [
+  { id: 'overview', label: 'Overview', enabled: true },
+  { id: 'research', label: 'Research', enabled: true },
+  { id: 'ideas', label: 'Ideas', enabled: false },
+  { id: 'content', label: 'Content', enabled: false },
+  { id: 'assets', label: 'Assets', enabled: false },
+  { id: 'products', label: 'Products', enabled: false },
+  { id: 'export', label: 'Export', enabled: false },
+] as const
+
+type TabId = (typeof TABS)[number]['id']
+
 export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [project, setProject] = useState<Project | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [activeTab, setActiveTab] = useState<TabId>('overview')
+  const [organizing, setOrganizing] = useState(false)
+  const [organizeError, setOrganizeError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
 
@@ -25,6 +42,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setProject(null)
     setLoadError(null)
     setSaveState('idle')
+    setActiveTab('overview')
+    setOrganizeError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -43,25 +62,28 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => {
-      setSaveState('saving')
-      saveProject(project)
-        .then(() => setSaveState('saved'))
-        .catch(() => setSaveState('error'))
+      runSave(project)
     }, AUTOSAVE_DELAY_MS)
   }, [project])
 
-  function updateTitle(value: string) {
-    setProject((current) => (current ? { ...current, title: value } : current))
+  async function runSave(toSave: Project) {
+    setSaveState('saving')
+    try {
+      await saveProject(toSave)
+      setSaveState('saved')
+    } catch {
+      setSaveState('error')
+    }
   }
 
-  function updateTopic(value: string) {
-    setProject((current) => (current ? { ...current, topic: value } : current))
+  function handleRetrySave() {
+    if (!project) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    runSave(project)
   }
 
-  function updateManualNotes(value: string) {
-    setProject((current) =>
-      current ? { ...current, research: { ...current.research, manualNotes: value } } : current,
-    )
+  function updateProject(updater: (current: Project) => Project) {
+    setProject((current) => (current ? updater(current) : current))
   }
 
   async function handleDelete() {
@@ -82,6 +104,27 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     URL.revokeObjectURL(url)
   }
 
+  async function handleOrganize() {
+    if (!project) return
+    setOrganizing(true)
+    setOrganizeError(null)
+    try {
+      // Flush any pending edit before asking the AI to organize, so it works
+      // from the latest text rather than a stale on-disk copy.
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const updated = await apiOrganizeResearch(project.id)
+      skipNextSave.current = true
+      setProject(updated)
+    } catch (err) {
+      setOrganizeError(err instanceof Error ? err.message : 'Failed to organize research with AI')
+    } finally {
+      setOrganizing(false)
+    }
+  }
+
   if (loadError) {
     return (
       <div>
@@ -98,43 +141,56 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   return (
     <div className="workspace">
       <div className="workspace-toolbar">
-        <button onClick={onBack}>&larr; Back to projects</button>
-        <span className={`save-indicator save-${saveState}`}>
-          {saveState === 'idle' && 'No changes yet'}
-          {saveState === 'saving' && 'Saving...'}
-          {saveState === 'saved' && 'Saved'}
-          {saveState === 'error' && 'Save failed'}
-        </span>
+        <div className="toolbar-left">
+          <button onClick={onBack}>&larr; Back to projects</button>
+        </div>
+        <div className="toolbar-right">
+          <span className={`save-indicator save-${saveState}`}>
+            {saveState === 'idle' && 'No changes yet'}
+            {saveState === 'saving' && 'Saving...'}
+            {saveState === 'saved' && 'Saved'}
+            {saveState === 'error' && 'Save failed'}
+          </span>
+          {saveState === 'error' && <button onClick={handleRetrySave}>Retry save</button>}
+          <button onClick={handleExport}>Export project JSON</button>
+          <button className="danger-button" onClick={handleDelete}>
+            Delete project
+          </button>
+        </div>
       </div>
 
-      <label className="field">
-        Title
-        <input value={project.title} onChange={(event) => updateTitle(event.target.value)} />
-      </label>
+      <div className="tab-bar">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            className={`tab-button ${activeTab === tab.id ? 'tab-active' : ''}`}
+            disabled={!tab.enabled}
+            title={tab.enabled ? undefined : 'Coming in a future phase'}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-      <label className="field">
-        Topic
-        <input value={project.topic} onChange={(event) => updateTopic(event.target.value)} />
-      </label>
-
-      <section className="research-workspace">
-        <h2>Research workspace</h2>
-        <label className="field">
-          Manual notes
-          <textarea
-            rows={12}
-            value={project.research.manualNotes}
-            onChange={(event) => updateManualNotes(event.target.value)}
-            placeholder="Write or paste your own research notes here..."
+      <div className="tab-content">
+        {activeTab === 'overview' && (
+          <OverviewTab
+            title={project.title}
+            topic={project.topic}
+            onChangeTitle={(title) => updateProject((current) => ({ ...current, title }))}
+            onChangeTopic={(topic) => updateProject((current) => ({ ...current, topic }))}
           />
-        </label>
-      </section>
-
-      <div className="workspace-actions">
-        <button onClick={handleExport}>Export project JSON</button>
-        <button className="danger-button" onClick={handleDelete}>
-          Delete project
-        </button>
+        )}
+        {activeTab === 'research' && (
+          <ResearchTab
+            research={project.research}
+            onChangeResearch={(research) => updateProject((current) => ({ ...current, research }))}
+            onOrganize={handleOrganize}
+            organizing={organizing}
+            organizeError={organizeError}
+          />
+        )}
       </div>
     </div>
   )
