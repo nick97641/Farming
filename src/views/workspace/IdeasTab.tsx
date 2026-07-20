@@ -15,6 +15,8 @@ type Props = {
   onGenerate: (count: number) => void
   generating: boolean
   generateError: string | null
+  selectedIdeaId: string | null
+  onChangeSelectedIdeaId: (ideaId: string | null) => void
 }
 
 function createBlankIdea(): Idea {
@@ -54,6 +56,8 @@ export function IdeasTab({
   onGenerate,
   generating,
   generateError,
+  selectedIdeaId,
+  onChangeSelectedIdeaId,
 }: Props) {
   const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | IdeaStatus>('all')
@@ -92,6 +96,9 @@ export function IdeasTab({
     if (!window.confirm(`Delete "${title || 'this idea'}"? This cannot be undone.`)) return
     onChangeIdeas(ideas.filter((idea) => idea.id !== id))
     if (editingIdeaId === id) setEditingIdeaId(null)
+    // Deleting the selected idea must clear the selection — but never
+    // touches an existing designBrief, which keeps its own snapshot.
+    if (selectedIdeaId === id) onChangeSelectedIdeaId(null)
   }
 
   function handleDuplicateIdea(idea: Idea) {
@@ -237,9 +244,12 @@ export function IdeasTab({
             <IdeaCard
               key={idea.id}
               idea={idea}
+              isSelectedForProduction={idea.id === selectedIdeaId}
               onEdit={() => setEditingIdeaId(idea.id)}
               onDuplicate={() => handleDuplicateIdea(idea)}
               onDelete={() => handleDeleteIdea(idea.id, idea.title)}
+              onSelectForProduction={() => onChangeSelectedIdeaId(idea.id)}
+              onRemoveFromProduction={() => onChangeSelectedIdeaId(null)}
             />
           ))}
         </ul>

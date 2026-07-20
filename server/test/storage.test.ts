@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
+import type { Idea } from '../../shared/schema/project.ts'
 
 let dataDir: string
 
@@ -53,4 +54,56 @@ test('concurrent writes to the same project resolve without corrupting the file'
   const reloaded = await readProject('concurrent-write-test')
   assert.ok(['Writer A', 'Writer B'].includes(reloaded.title))
   assert.ok([resultA.title, resultB.title].includes(reloaded.title))
+})
+
+test('a selected approved idea and its designBrief persist unchanged through save and reload', async () => {
+  const project = await createProject({ id: 'design-brief-round-trip', title: 'Test', topic: 'hydroponics' })
+  const now = new Date().toISOString()
+  const approvedIdea: Idea = {
+    id: 'idea-approved-1',
+    title: 'DWC Lettuce Setup',
+    hook: '',
+    format: '',
+    targetViewer: '',
+    problemSolved: 'Root rot from low oxygen',
+    visualConcept: '',
+    pdfOrTemplateOpportunity: '',
+    createdAt: now,
+    summary: 'A beginner walkthrough of a DWC lettuce build.',
+    contentType: 'youtube-video',
+    status: 'approved',
+    sourceResearch: [],
+    targetAudience: 'First-time hydroponic growers',
+    proposedOutcome: 'Viewer builds a working DWC system',
+    differentiator: 'Focuses on troubleshooting',
+    confidence: 'medium',
+    notes: '',
+    updatedAt: now,
+  }
+
+  await writeProject({
+    ...project,
+    ideas: [approvedIdea],
+    selectedIdeaId: approvedIdea.id,
+    designBrief: {
+      sourceIdeaId: approvedIdea.id,
+      status: 'draft',
+      title: approvedIdea.title,
+      audience: approvedIdea.targetAudience,
+      problem: approvedIdea.problemSolved,
+      outcome: approvedIdea.proposedOutcome,
+      format: 'PDF guide',
+      contentRequirements: ['Step-by-step build instructions'],
+      visualDirection: 'Bright, clean, beginner-friendly diagrams',
+      constraints: ['Must fit on a single printable page'],
+      createdAt: now,
+      updatedAt: now,
+    },
+  })
+
+  const reloaded = await readProject('design-brief-round-trip')
+  assert.equal(reloaded.selectedIdeaId, approvedIdea.id)
+  assert.ok(reloaded.designBrief)
+  assert.equal(reloaded.designBrief?.sourceIdeaId, approvedIdea.id)
+  assert.deepEqual(reloaded.designBrief?.contentRequirements, ['Step-by-step build instructions'])
 })

@@ -176,6 +176,29 @@ export const IdeaSchema = z.object({
 })
 export type Idea = z.infer<typeof IdeaSchema>
 
+export const DesignBriefStatusSchema = z.enum(['draft', 'ready'])
+export type DesignBriefStatus = z.infer<typeof DesignBriefStatusSchema>
+
+// A project has at most one active Design Brief. It is created as an
+// editable snapshot of a selected idea, not a live view of it — sourceIdeaId
+// is kept only to show provenance and to detect (never to auto-resolve) when
+// it no longer matches the project's current selectedIdeaId.
+export const DesignBriefSchema = z.object({
+  sourceIdeaId: z.string(),
+  status: DesignBriefStatusSchema,
+  title: z.string(),
+  audience: z.string(),
+  problem: z.string(),
+  outcome: z.string(),
+  format: z.string(),
+  contentRequirements: z.array(z.string()),
+  visualDirection: z.string(),
+  constraints: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+})
+export type DesignBrief = z.infer<typeof DesignBriefSchema>
+
 export const ShortSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -252,6 +275,7 @@ export const ProjectSchema = z.object({
   research: ResearchSchema,
   ideas: z.array(IdeaSchema),
   selectedIdeaId: z.string().nullable(),
+  designBrief: DesignBriefSchema.nullable(),
   content: ContentSchema,
   products: ProductsSchema,
   assets: z.array(AssetSchema),
@@ -288,6 +312,7 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
     },
     ideas: [],
     selectedIdeaId: null,
+    designBrief: null,
     content: {
       longFormScript: '',
       shorts: [],

@@ -108,6 +108,67 @@ test('normalizeLegacyProject backfills Phase 3 idea fields while preserving orig
   assert.ok(validated.success)
 })
 
+test('normalizeLegacyProject defaults selectedIdeaId and designBrief to null when both are missing entirely', () => {
+  const raw = { id: 'legacy-5', research: {}, ideas: [] }
+  const normalized = normalizeLegacyProject(raw) as { selectedIdeaId: unknown; designBrief: unknown }
+  assert.equal(normalized.selectedIdeaId, null)
+  assert.equal(normalized.designBrief, null)
+})
+
+test('normalizeLegacyProject keeps selectedIdeaId when it references an existing approved idea', () => {
+  const raw = {
+    id: 'legacy-6',
+    research: {},
+    ideas: [{ id: 'idea-approved', status: 'approved' }],
+    selectedIdeaId: 'idea-approved',
+  }
+  const normalized = normalizeLegacyProject(raw) as { selectedIdeaId: unknown }
+  assert.equal(normalized.selectedIdeaId, 'idea-approved')
+})
+
+test('normalizeLegacyProject clears selectedIdeaId when the referenced idea no longer exists', () => {
+  const raw = { id: 'legacy-7', research: {}, ideas: [], selectedIdeaId: 'idea-deleted' }
+  const normalized = normalizeLegacyProject(raw) as { selectedIdeaId: unknown }
+  assert.equal(normalized.selectedIdeaId, null)
+})
+
+test('normalizeLegacyProject clears selectedIdeaId when the referenced idea exists but is not approved', () => {
+  const raw = {
+    id: 'legacy-8',
+    research: {},
+    ideas: [{ id: 'idea-draft', status: 'draft' }],
+    selectedIdeaId: 'idea-draft',
+  }
+  const normalized = normalizeLegacyProject(raw) as { selectedIdeaId: unknown }
+  assert.equal(normalized.selectedIdeaId, null)
+})
+
+test('normalizeLegacyProject preserves a structurally valid existing designBrief unchanged', () => {
+  const designBrief = {
+    sourceIdeaId: 'idea-approved',
+    status: 'ready',
+    title: 'Brief title',
+    audience: 'Beginners',
+    problem: 'No time to research setups',
+    outcome: 'Confidence to start growing',
+    format: 'pdf-guide',
+    contentRequirements: ['One requirement'],
+    visualDirection: 'Bright greens, clean layout',
+    constraints: ['Must fit one printable page'],
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  }
+  const raw = { id: 'legacy-9', research: {}, ideas: [], designBrief }
+  const normalized = normalizeLegacyProject(raw) as { designBrief: unknown }
+  assert.deepEqual(normalized.designBrief, designBrief)
+})
+
+test('normalizeLegacyProject drops a malformed designBrief (missing sourceIdeaId) back to null', () => {
+  const raw = { id: 'legacy-10', research: {}, ideas: [], designBrief: { title: 'no source idea id here' } }
+  const normalized = normalizeLegacyProject(raw) as { designBrief: unknown }
+  assert.equal(normalized.designBrief, null)
+})
+
 let dataDir: string
 
 before(async () => {
@@ -191,5 +252,40 @@ test('readProject loads a project.json written before the ideas field existed at
 
   const loaded = await readProject(projectId)
   assert.deepEqual(loaded.ideas, [])
+  assert.ok(ProjectSchema.safeParse(loaded).success)
+})
+
+test('readProject loads a project.json written before selectedIdeaId or designBrief existed at all', async () => {
+  const projectId = 'on-disk-pre-selection'
+  await mkdir(getProjectDir(projectId), { recursive: true })
+
+  const preSelectionOnDisk = {
+    id: projectId,
+    title: 'Pre-Selection Project',
+    topic: 'pre-selection topic',
+    status: 'draft',
+    research: {
+      manualNotes: '',
+      pastedResearch: '',
+      organizedSummary: '',
+      aiExtracted: { commonQuestions: [], audienceProblems: [], contentGaps: [], estimatedOpportunities: [] },
+      sources: [],
+    },
+    ideas: [],
+    // no `selectedIdeaId` and no `designBrief` at all — this is what every
+    // project.json looked like before this checkpoint
+    content: { longFormScript: '', shorts: [], shotList: [], thumbnailIdeas: [], captions: [] },
+    products: { pdfGuide: null, template: null, productDescription: '' },
+    assets: [],
+    exports: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  }
+
+  await writeFile(getProjectFilePath(projectId), JSON.stringify(preSelectionOnDisk), 'utf8')
+
+  const loaded = await readProject(projectId)
+  assert.equal(loaded.selectedIdeaId, null)
+  assert.equal(loaded.designBrief, null)
   assert.ok(ProjectSchema.safeParse(loaded).success)
 })

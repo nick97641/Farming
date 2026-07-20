@@ -8,6 +8,7 @@ import {
   organizeResearch as apiOrganizeResearch,
   saveProject,
 } from '../lib/api'
+import { DesignBriefTab } from './workspace/DesignBriefTab'
 import { IdeasTab } from './workspace/IdeasTab'
 import { OverviewTab } from './workspace/OverviewTab'
 import { ResearchTab } from './workspace/ResearchTab'
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'overview', label: 'Overview', enabled: true },
   { id: 'research', label: 'Research', enabled: true },
   { id: 'ideas', label: 'Ideas', enabled: true },
+  { id: 'brief', label: 'Design Brief', enabled: true },
   { id: 'content', label: 'Content', enabled: false },
   { id: 'assets', label: 'Assets', enabled: false },
   { id: 'products', label: 'Products', enabled: false },
@@ -233,6 +235,16 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onGenerate={handleGenerateIdeas}
             generating={generatingIdeas}
             generateError={generateIdeasError}
+            selectedIdeaId={project.selectedIdeaId}
+            onChangeSelectedIdeaId={(selectedIdeaId) => updateProject((current) => ({ ...current, selectedIdeaId }))}
+          />
+        )}
+        {activeTab === 'brief' && (
+          <DesignBriefTab
+            ideas={project.ideas}
+            selectedIdeaId={project.selectedIdeaId}
+            designBrief={project.designBrief}
+            onChangeDesignBrief={(designBrief) => updateProject((current) => ({ ...current, designBrief }))}
           />
         )}
       </div>

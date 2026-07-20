@@ -1,4 +1,9 @@
-import { ConfidenceSchema, IdeaContentTypeSchema, IdeaStatusSchema } from '../../shared/schema/project.ts'
+import {
+  ConfidenceSchema,
+  DesignBriefStatusSchema,
+  IdeaContentTypeSchema,
+  IdeaStatusSchema,
+} from '../../shared/schema/project.ts'
 
 type PlainRecord = Record<string, unknown>
 
@@ -9,6 +14,7 @@ function isRecord(value: unknown): value is PlainRecord {
 const VALID_CONTENT_TYPES = new Set<string>(IdeaContentTypeSchema.options)
 const VALID_IDEA_STATUSES = new Set<string>(IdeaStatusSchema.options)
 const VALID_CONFIDENCE_LEVELS = new Set<string>(ConfidenceSchema.options)
+const VALID_DESIGN_BRIEF_STATUSES = new Set<string>(DesignBriefStatusSchema.options)
 
 // Upgrades an older flat string[] list (from before the confidence field
 // existed) into the current { text, confidence }[] shape. Anything already in
@@ -67,16 +73,58 @@ function normalizeIdea(raw: unknown): unknown {
   }
 }
 
+// A Design Brief is an editable snapshot, not a derived value: a malformed
+// one (missing its required sourceIdeaId) is dropped back to null rather than
+// partially repaired, since a half-valid brief is worse than a clear
+// "create a new brief" prompt. A structurally valid one is otherwise left as
+// close to untouched as possible.
+function normalizeDesignBrief(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.sourceIdeaId !== 'string') return null
+
+  const now = new Date().toISOString()
+  return {
+    sourceIdeaId: raw.sourceIdeaId,
+    status: typeof raw.status === 'string' && VALID_DESIGN_BRIEF_STATUSES.has(raw.status) ? raw.status : 'draft',
+    title: typeof raw.title === 'string' ? raw.title : '',
+    audience: typeof raw.audience === 'string' ? raw.audience : '',
+    problem: typeof raw.problem === 'string' ? raw.problem : '',
+    outcome: typeof raw.outcome === 'string' ? raw.outcome : '',
+    format: typeof raw.format === 'string' ? raw.format : '',
+    contentRequirements: Array.isArray(raw.contentRequirements) ? raw.contentRequirements : [],
+    visualDirection: typeof raw.visualDirection === 'string' ? raw.visualDirection : '',
+    constraints: Array.isArray(raw.constraints) ? raw.constraints : [],
+    createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
+  }
+}
+
 // Fills in research fields introduced after a project.json may have first
 // been written (Phase 1 → Phase 2 → confidence field), and upgrades older
 // flat string arrays into their current shape, so previously saved projects
-// keep loading instead of being rejected as corrupt. Only touches `research`
-// and `ideas`; every other top-level field is passed through untouched.
+// keep loading instead of being rejected as corrupt. Only touches `research`,
+// `ideas`, `selectedIdeaId`, and `designBrief`; every other top-level field is
+// passed through untouched.
 export function normalizeLegacyProject(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
   const research = isRecord(raw.research) ? raw.research : {}
   const aiExtracted = isRecord(research.aiExtracted) ? research.aiExtracted : {}
+  const ideas = Array.isArray(raw.ideas) ? raw.ideas.map(normalizeIdea) : []
+
+  // selectedIdeaId must always point at an idea that still exists and is
+  // approved (the only status "select for production" can be triggered
+  // from). Anything else — missing entirely, deleted, or no longer
+  // approved — is reset to null here rather than rejected, the same
+  // defensive-normalize approach used for every other field in this file.
+  const selectedIdeaId =
+    typeof raw.selectedIdeaId === 'string' &&
+    ideas.some((idea) => {
+      const candidate = idea as { id: string; status: string }
+      return candidate.id === raw.selectedIdeaId && candidate.status === 'approved'
+    })
+      ? raw.selectedIdeaId
+      : null
 
   return {
     ...raw,
@@ -98,6 +146,8 @@ export function normalizeLegacyProject(raw: unknown): unknown {
       },
       sources: Array.isArray(research.sources) ? research.sources : [],
     },
-    ideas: Array.isArray(raw.ideas) ? raw.ideas.map(normalizeIdea) : [],
+    ideas,
+    selectedIdeaId,
+    designBrief: normalizeDesignBrief(raw.designBrief),
   }
 }
