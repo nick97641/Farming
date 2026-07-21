@@ -7,7 +7,7 @@
     "dev": "vite",
     "server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
-    "test": "tsx --test server/test/storage.test.ts server/test/project-creation.test.ts server/test/project-management.test.ts server/test/schema.test.ts server/test/ollama-client.test.ts server/test/project-migration.test.ts server/test/idea-schema.test.ts server/test/idea-storage.test.ts server/test/ollama-idea-generation.test.ts server/test/image-job-schema.test.ts server/test/image-storage.test.ts server/test/image-job-routes.test.ts server/test/image-job-options.test.ts",
+    "test": "tsx --test server/test/storage.test.ts server/test/project-creation.test.ts server/test/project-management.test.ts server/test/schema.test.ts server/test/ollama-client.test.ts server/test/project-migration.test.ts server/test/idea-schema.test.ts server/test/idea-storage.test.ts server/test/ollama-idea-generation.test.ts server/test/image-job-schema.test.ts server/test/image-storage.test.ts server/test/image-job-routes.test.ts server/test/image-job-options.test.ts server/test/draw-things-client.test.ts",
     "lint": "oxlint",
     "preview": "vite preview"
   },

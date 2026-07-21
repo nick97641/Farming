@@ -4,8 +4,14 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
-import { deleteImageFile, ImageUploadValidationError, importImageFile, resolveImageFileForServing } from '../lib/image-storage.ts'
-import { assertPathWithinDir, getImportedImagesDir, getProjectDir, PathEscapeError } from '../lib/paths.ts'
+import {
+  deleteImageFile,
+  ImageUploadValidationError,
+  importImageFile,
+  resolveImageFileForServing,
+  saveGeneratedImageFile,
+} from '../lib/image-storage.ts'
+import { assertPathWithinDir, getGeneratedImagesDir, getImportedImagesDir, getProjectDir, PathEscapeError } from '../lib/paths.ts'
 
 let dataDir: string
 
@@ -23,6 +29,14 @@ after(async () => {
 const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])
 const JPEG_BYTES = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0])
 const WEBP_BYTES = Buffer.concat([Buffer.from('RIFF', 'ascii'), Buffer.from([0, 0, 0, 0]), Buffer.from('WEBP', 'ascii')])
+
+test('saveGeneratedImageFile stores Draw Things output in generated/', async () => {
+  const projectId = 'generated-output-test'
+  const output = await saveGeneratedImageFile({ projectId, buffer: PNG_BYTES })
+  assert.match(output.fileName, /^[0-9a-f-]+\.png$/i)
+  assert.equal(path.dirname(path.join(getProjectDir(projectId), output.relativePath)), getGeneratedImagesDir(projectId))
+  assert.deepEqual(await readFile(path.join(getProjectDir(projectId), output.relativePath)), PNG_BYTES)
+})
 
 test('assertPathWithinDir accepts a path inside the base directory', () => {
   const base = '/tmp/project-x/assets/images'

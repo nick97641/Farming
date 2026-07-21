@@ -83,3 +83,7 @@ export async function importImageJobFile(projectId: string, jobId: string, file:
 export function deleteImageJob(projectId: string, jobId: string): Promise<Project> {
   return request(`/projects/${projectId}/image-jobs/${jobId}`, { method: 'DELETE' })
 }
+
+export function generateImageJob(projectId: string, jobId: string): Promise<Project> {
+  return request(`/projects/${projectId}/image-jobs/${jobId}/generate`, { method: 'POST' })
+}

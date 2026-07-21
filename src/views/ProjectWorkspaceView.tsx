@@ -4,6 +4,7 @@ import type { Idea, Project } from '../../shared/schema/project'
 import {
   deleteImageJob as apiDeleteImageJob,
   deleteProject,
+  generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
   getProject,
   importImageJobFile as apiImportImageJobFile,
@@ -52,6 +53,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [pendingGeneratedIdeas, setPendingGeneratedIdeas] = useState<Idea[]>([])
   const [importingImageJobId, setImportingImageJobId] = useState<string | null>(null)
   const [importImageError, setImportImageError] = useState<string | null>(null)
+  const [generatingImageJobId, setGeneratingImageJobId] = useState<string | null>(null)
+  const [generateImageError, setGenerateImageError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
 
@@ -65,6 +68,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setGenerateIdeasError(null)
     setPendingGeneratedIdeas([])
     setImportImageError(null)
+    setGenerateImageError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -205,6 +209,25 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
+  async function handleGenerateImageJob(jobId: string) {
+    if (!project) return
+    setGeneratingImageJobId(jobId)
+    setGenerateImageError(null)
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const updated = await apiGenerateImageJob(project.id, jobId)
+      skipNextSave.current = true
+      setProject(updated)
+    } catch (err) {
+      setGenerateImageError(err instanceof Error ? err.message : 'Failed to generate image with Draw Things')
+    } finally {
+      setGeneratingImageJobId(null)
+    }
+  }
+
   if (loadError) {
     return (
       <div>
@@ -296,6 +319,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
         {activeTab === 'images' && (
           <ImageGenerationTab
             projectId={project.id}
+            projectTitle={project.title}
+            projectTopic={project.topic}
             imageJobs={project.imageJobs}
             designBrief={project.designBrief}
             onChangeImageJobs={(imageJobs) => updateProject((current) => ({ ...current, imageJobs }))}
@@ -303,6 +328,9 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             importingJobId={importingImageJobId}
             importError={importImageError}
             onDeleteJob={handleDeleteImageJob}
+            onGenerate={handleGenerateImageJob}
+            generatingJobId={generatingImageJobId}
+            generateError={generateImageError}
           />
         )}
       </div>

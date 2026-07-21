@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { duplicateImageJob } from '../../src/lib/imageJobOptions.ts'
+import { applyImageRequirements, duplicateImageJob } from '../../src/lib/imageJobOptions.ts'
 import type { ImageJob } from '../../shared/schema/project.ts'
 
 function completedJob(): ImageJob {
@@ -59,4 +59,18 @@ test('duplicateImageJob accepts explicit id/now overrides for deterministic test
   assert.equal(copy.id, 'fixed-id')
   assert.equal(copy.createdAt, '2025-01-01T00:00:00.000Z')
   assert.equal(copy.updatedAt, '2025-01-01T00:00:00.000Z')
+})
+
+test('applyImageRequirements fills a Draw Things-ready YouTube job', () => {
+  const job = { ...completedJob(), status: 'draft' as const, output: null, purpose: 'youtube-thumbnail' as const }
+  const filled = applyImageRequirements(job, {
+    title: 'Simple Deep Water Culture on a Budget',
+    topic: 'Growing lettuce and herbs with low-cost DWC',
+  })
+  assert.equal(filled.width, 1152)
+  assert.equal(filled.height, 640)
+  assert.equal(filled.status, 'ready')
+  assert.equal(filled.sourceType, 'generated')
+  assert.match(filled.prompt, /Simple Deep Water Culture on a Budget/)
+  assert.match(filled.negativePrompt, /watermark/)
 })

@@ -81,6 +81,36 @@ export async function importImageFile(input: { projectId: string; jobId: string;
   }
 }
 
+// Draw Things returns image bytes directly to the backend. Store them in the
+// generated/ sibling of imported/ using the same byte validation, UUID naming,
+// atomic rename, and project-contained path rules as manual imports.
+export async function saveGeneratedImageFile(input: { projectId: string; buffer: Buffer }): Promise<FileRef> {
+  const { projectId, buffer } = input
+  if (buffer.length === 0) throw new ImageUploadValidationError('Generated image is empty')
+  if (buffer.length > MAX_IMAGE_BYTES) throw new ImageUploadValidationError('Generated image exceeds the 25MB limit')
+  const detected = detectImageType(buffer)
+  if (!detected) throw new ImageUploadValidationError('Draw Things returned an unrecognized image format')
+
+  const dir = getGeneratedImagesDir(projectId)
+  await mkdir(dir, { recursive: true })
+  const fileName = `${randomUUID()}.${detected.ext}`
+  const destPath = assertPathWithinDir(getImageJobsDir(projectId), path.join(dir, fileName))
+  const tempPath = path.join(dir, `.tmp-${randomBytes(6).toString('hex')}`)
+
+  await writeFile(tempPath, buffer)
+  try {
+    await rename(tempPath, destPath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined)
+    throw error
+  }
+  return {
+    fileName,
+    relativePath: path.relative(getProjectDir(projectId), destPath),
+    generatedAt: new Date().toISOString(),
+  }
+}
+
 // Resolves a stored relativePath to a real, on-disk absolute path, verifying
 // containment both lexically (against `../` traversal) and after symlink
 // resolution (against a symlink that points outside the allowed directory).

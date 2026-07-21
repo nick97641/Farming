@@ -2,10 +2,12 @@ import { useRef, useState } from 'react'
 
 import type { DesignBrief, ImageJob } from '../../../shared/schema/project'
 import { getImageJobFileUrl } from '../../lib/api'
-import { DIMENSION_PRESETS, PURPOSE_OPTIONS, STATUS_OPTIONS } from '../../lib/imageJobOptions'
+import { applyImageRequirements, DIMENSION_PRESETS, PURPOSE_OPTIONS, STATUS_OPTIONS } from '../../lib/imageJobOptions'
 
 type Props = {
   projectId: string
+  projectTitle: string
+  projectTopic: string
   job: ImageJob
   designBrief: DesignBrief | null
   onChange: (job: ImageJob) => void
@@ -14,10 +16,15 @@ type Props = {
   onImport: (file: File) => void
   importing: boolean
   importError: string | null
+  onGenerate: () => void
+  generating: boolean
+  generateError: string | null
 }
 
 export function ImageJobEditor({
   projectId,
+  projectTitle,
+  projectTopic,
   job,
   designBrief,
   onChange,
@@ -26,6 +33,9 @@ export function ImageJobEditor({
   onImport,
   importing,
   importError,
+  onGenerate,
+  generating,
+  generateError,
 }: Props) {
   const [missing, setMissing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -83,6 +93,20 @@ export function ImageJobEditor({
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          onClick={() =>
+            onChange(
+              applyImageRequirements(job, {
+                title: designBrief?.title || projectTitle,
+                topic: projectTopic,
+                visualDirection: designBrief?.visualDirection,
+              }),
+            )
+          }
+        >
+          Auto-fill image requirements
+        </button>
         <label className="field">
           Status
           <select value={job.status} onChange={(event) => patch({ status: event.target.value as ImageJob['status'] })}>
@@ -165,6 +189,11 @@ export function ImageJobEditor({
           </>
         ) : (
           <>
+            <button type="button" onClick={onGenerate} disabled={generating || importing || !job.prompt.trim()}>
+              {generating ? 'Generating with Draw Things...' : 'Generate with Draw Things'}
+            </button>
+            {generateError && <p className="error-text">{generateError}</p>}
+            <p className="field-hint">Or import an image you created elsewhere:</p>
             <input
               ref={fileInputRef}
               type="file"

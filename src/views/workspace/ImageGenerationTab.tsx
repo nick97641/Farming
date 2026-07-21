@@ -7,6 +7,8 @@ import { ImageJobEditor } from './ImageJobEditor'
 
 type Props = {
   projectId: string
+  projectTitle: string
+  projectTopic: string
   imageJobs: ImageJob[]
   designBrief: DesignBrief | null
   onChangeImageJobs: (jobs: ImageJob[]) => void
@@ -14,6 +16,9 @@ type Props = {
   importingJobId: string | null
   importError: string | null
   onDeleteJob: (jobId: string, label: string) => void
+  onGenerate: (jobId: string) => void
+  generatingJobId: string | null
+  generateError: string | null
 }
 
 function createBlankJob(designBrief: DesignBrief | null): ImageJob {
@@ -38,6 +43,8 @@ function createBlankJob(designBrief: DesignBrief | null): ImageJob {
 
 export function ImageGenerationTab({
   projectId,
+  projectTitle,
+  projectTopic,
   imageJobs,
   designBrief,
   onChangeImageJobs,
@@ -45,6 +52,9 @@ export function ImageGenerationTab({
   importingJobId,
   importError,
   onDeleteJob,
+  onGenerate,
+  generatingJobId,
+  generateError,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingJob = imageJobs.find((job) => job.id === editingId) ?? null
@@ -76,6 +86,8 @@ export function ImageGenerationTab({
     return (
       <ImageJobEditor
         projectId={projectId}
+        projectTitle={projectTitle}
+        projectTopic={projectTopic}
         job={editingJob}
         designBrief={designBrief}
         onChange={handleUpdate}
@@ -84,6 +96,9 @@ export function ImageGenerationTab({
         onImport={(file) => onImport(editingJob.id, file)}
         importing={importingJobId === editingJob.id}
         importError={importError}
+        onGenerate={() => onGenerate(editingJob.id)}
+        generating={generatingJobId === editingJob.id}
+        generateError={generateError}
       />
     )
   }
@@ -91,9 +106,8 @@ export function ImageGenerationTab({
   return (
     <div className="image-jobs-tab">
       <p className="tab-explanation">
-        Create image jobs for this project&apos;s covers, thumbnails, and illustrations. Write a prompt and target
-        dimensions, then import a locally generated or sourced image into each job — direct generation isn&apos;t
-        available yet.
+        Create covers, thumbnails, and illustrations with the local Draw Things app. Choose a purpose, auto-fill the
+        requirements, review the prompt, and generate with one explicit click. You can still import an existing image.
       </p>
 
       <button type="button" onClick={handleCreate}>
