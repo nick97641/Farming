@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import type { DesignBrief, ImageJob } from '../../../shared/schema/project'
+import { duplicateImageJob } from '../../lib/imageJobOptions'
 import { ImageJobCard } from './ImageJobCard'
 import { ImageJobEditor } from './ImageJobEditor'
 
@@ -55,24 +56,15 @@ export function ImageGenerationTab({
   }
 
   function handleUpdate(updated: ImageJob) {
-    onChangeImageJobs(imageJobs.map((job) => (job.id === updated.id ? updated : job)))
+    onChangeImageJobs(
+      imageJobs.map((job) =>
+        job.id === updated.id && job.status !== 'completed' && job.output === null ? updated : job,
+      ),
+    )
   }
 
-  // Duplicate keeps the prompt/negativePrompt/dimensions/purpose/Design Brief
-  // reference exactly as approved; the copy starts with a fresh id, fresh
-  // timestamps, and no output — never a partial or edited copy of the output.
   function handleDuplicate(job: ImageJob) {
-    const now = new Date().toISOString()
-    const copy: ImageJob = {
-      ...job,
-      id: crypto.randomUUID(),
-      status: 'draft',
-      output: null,
-      originalFilename: null,
-      createdAt: now,
-      updatedAt: now,
-    }
-    onChangeImageJobs([...imageJobs, copy])
+    onChangeImageJobs([...imageJobs, duplicateImageJob(job)])
   }
 
   function handleDelete(job: ImageJob) {

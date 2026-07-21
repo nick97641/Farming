@@ -1,4 +1,4 @@
-import type { ImageJobPurpose, ImageJobStatus } from '../../shared/schema/project'
+import type { ImageJob, ImageJobPurpose, ImageJobStatus } from '../../shared/schema/project'
 
 export const PURPOSE_OPTIONS: { value: ImageJobPurpose; label: string }[] = [
   { value: 'pdf-cover', label: 'PDF cover' },
@@ -31,3 +31,20 @@ export const DIMENSION_PRESETS: DimensionPreset[] = [
   { label: 'PDF cover (1275×1650)', width: 1275, height: 1650 },
   { label: 'Square (1024×1024)', width: 1024, height: 1024 },
 ]
+
+// Pulled out as a pure function (rather than inlined in ImageGenerationTab)
+// so the "duplicate" rule — new id/timestamps, no output, everything else
+// carried over including the Design Brief reference — is independently
+// testable without a React test setup this repo doesn't have.
+export function duplicateImageJob(job: ImageJob, overrides?: { id?: string; now?: string }): ImageJob {
+  const now = overrides?.now ?? new Date().toISOString()
+  return {
+    ...job,
+    id: overrides?.id ?? crypto.randomUUID(),
+    status: 'draft',
+    output: null,
+    originalFilename: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+}

@@ -1,6 +1,12 @@
 import express, { Router } from 'express'
 
-import { deleteImageFile, ImageUploadValidationError, importImageFile, resolveImageFileForServing } from '../lib/image-storage.ts'
+import {
+  deleteImageFile,
+  getOwnedImageFileKey,
+  ImageUploadValidationError,
+  importImageFile,
+  resolveImageFileForServing,
+} from '../lib/image-storage.ts'
 import { ProjectDataCorruptError, ProjectNotFoundError, readProject, writeProject } from '../lib/storage.ts'
 import type { ImageJob, Project } from '../../shared/schema/project.ts'
 
@@ -45,7 +51,7 @@ imageJobsRouter.post(
     }
     // Completed jobs are immutable — another attempt means duplicating the
     // job client-side, never reusing or overwriting this one.
-    if (job.output) {
+    if (job.status === 'completed' || job.output) {
       res.status(409).json({ error: 'This image job already has a completed output. Duplicate the job to try again.' })
       return
     }
@@ -75,10 +81,18 @@ imageJobsRouter.post(
       status: 'completed',
       updatedAt: now,
     }
-    const updated = await writeProject({
-      ...project,
-      imageJobs: project.imageJobs.map((existing) => (existing.id === job.id ? updatedJob : existing)),
-    })
+    let updated: Project
+    try {
+      updated = await writeProject({
+        ...project,
+        imageJobs: project.imageJobs.map((existing) => (existing.id === job.id ? updatedJob : existing)),
+      })
+    } catch (error) {
+      // The metadata write did not complete, so the just-imported UUID file is
+      // still exclusively ours and can be rolled back without orphaning it.
+      await deleteImageFile(project.id, output)
+      throw error
+    }
     res.json(updated)
   },
 )
@@ -125,12 +139,21 @@ imageJobsRouter.delete('/projects/:id/image-jobs/:jobId', async (req, res) => {
   }
 
   if (job.output) {
-    await deleteImageFile(project.id, job.output.relativePath)
+    const ownedKey = getOwnedImageFileKey(project.id, job.output)
+    const isShared =
+      ownedKey !== null &&
+      project.imageJobs.some(
+        (other) => other.id !== job.id && other.output && getOwnedImageFileKey(project.id, other.output) === ownedKey,
+      )
+    if (!isShared) await deleteImageFile(project.id, job.output)
   }
 
-  const updated = await writeProject({
-    ...project,
-    imageJobs: project.imageJobs.filter((existing) => existing.id !== job.id),
-  })
+  const updated = await writeProject(
+    {
+      ...project,
+      imageJobs: project.imageJobs.filter((existing) => existing.id !== job.id),
+    },
+    { allowDeletedCompletedImageJobId: job.id },
+  )
   res.json(updated)
 })

@@ -1,9 +1,15 @@
-import { mkdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
-import { randomBytes } from 'node:crypto'
+import { lstat, mkdir, realpath, rename, unlink, writeFile } from 'node:fs/promises'
+import { randomBytes, randomUUID } from 'node:crypto'
 import path from 'node:path'
 
 import type { FileRef } from '../../shared/schema/project.ts'
-import { assertPathWithinDir, getImageJobsDir, getImportedImagesDir, getProjectDir } from './paths.ts'
+import {
+  assertPathWithinDir,
+  getGeneratedImagesDir,
+  getImageJobsDir,
+  getImportedImagesDir,
+  getProjectDir,
+} from './paths.ts'
 
 export class ImageUploadValidationError extends Error {
   constructor(message: string) {
@@ -35,12 +41,12 @@ function detectImageType(buffer: Buffer): { ext: string } | null {
 
 // Validates and writes an uploaded image into project-owned storage, then
 // returns a FileRef pointing at it. The on-disk filename is entirely
-// server-generated (jobId + random hex), never derived from the client's
+// server-generated (a UUID plus the byte-sniffed extension), never derived from the client's
 // original filename — so there is no traversal or extension-spoofing surface
 // on the write side at all; the client's name is preserved only as display
 // metadata by the caller.
 export async function importImageFile(input: { projectId: string; jobId: string; buffer: Buffer }): Promise<FileRef> {
-  const { projectId, jobId, buffer } = input
+  const { projectId, buffer } = input
 
   if (buffer.length === 0) {
     throw new ImageUploadValidationError('Uploaded file is empty')
@@ -56,7 +62,7 @@ export async function importImageFile(input: { projectId: string; jobId: string;
   const dir = getImportedImagesDir(projectId)
   await mkdir(dir, { recursive: true })
 
-  const fileName = `${jobId}-${randomBytes(6).toString('hex')}.${detected.ext}`
+  const fileName = `${randomUUID()}.${detected.ext}`
   const destPath = assertPathWithinDir(getImageJobsDir(projectId), path.join(dir, fileName))
   const tempPath = path.join(dir, `.tmp-${randomBytes(6).toString('hex')}`)
 
@@ -104,13 +110,51 @@ export async function resolveImageFileForServing(projectId: string, relativePath
   return resolveExistingImagePath(projectId, relativePath)
 }
 
-// Deletes a project-owned image file. A file that's already missing is not
-// an error — the caller (job deletion) proceeds either way. Never follows a
-// symlink to a target outside the project's image directory.
-export async function deleteImageFile(projectId: string, relativePath: string): Promise<void> {
-  const real = await resolveExistingImagePath(projectId, relativePath)
-  if (!real) return
-  await unlink(real).catch((error) => {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
-  })
+const OWNED_IMAGE_FILE_NAME =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\.(?:png|jpe?g|webp)$/i
+
+// Returns a canonical key only for files this checkpoint can prove it owns:
+// the FileRef name must match the basename, use our UUID naming convention,
+// and live directly inside imported/ or generated/. This deliberately does
+// not grandfather older or hand-authored names into deletion eligibility.
+export function getOwnedImageFileKey(projectId: string, output: FileRef): string | null {
+  const projectDir = getProjectDir(projectId)
+  let candidate: string
+  try {
+    candidate = assertPathWithinDir(getImageJobsDir(projectId), path.join(projectDir, output.relativePath))
+  } catch {
+    return null
+  }
+
+  const parent = path.dirname(candidate)
+  const allowedParents = [getImportedImagesDir(projectId), getGeneratedImagesDir(projectId)].map((dir) => path.resolve(dir))
+  if (!allowedParents.includes(parent)) return null
+  if (path.basename(candidate) !== output.fileName) return null
+  if (!OWNED_IMAGE_FILE_NAME.test(output.fileName)) return null
+  return candidate
+}
+
+// Deletes only a proven app-owned regular file. Missing, unsafe, legacy-named,
+// and symlink entries are intentionally left alone; job deletion can proceed
+// without turning untrusted project metadata into an arbitrary unlink.
+export async function deleteImageFile(projectId: string, output: FileRef): Promise<boolean> {
+  const candidate = getOwnedImageFileKey(projectId, output)
+  if (!candidate) return false
+
+  let stat
+  try {
+    stat = await lstat(candidate)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+  if (!stat.isFile() || stat.isSymbolicLink()) return false
+
+  try {
+    await unlink(candidate)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
 }

@@ -36,6 +36,12 @@ export class ProjectDataCorruptError extends Error {
   }
 }
 
+type WriteProjectOptions = {
+  // Only the dedicated image-job deletion route may remove a completed job;
+  // ordinary whole-project saves must preserve it byte-for-byte.
+  allowDeletedCompletedImageJobId?: string
+}
+
 // Serializes writes per project id so two concurrent saves can never interleave
 // their writes to the same project.json.
 const writeQueues = new Map<string, Promise<unknown>>()
@@ -121,9 +127,32 @@ export async function readProject(projectId: string): Promise<Project> {
   return result.data
 }
 
-export function writeProject(project: Project): Promise<Project> {
+function preserveCompletedImageJobs(current: Project, incoming: Project, options: WriteProjectOptions): Project {
+  const completedById = new Map(
+    current.imageJobs.filter((job) => job.status === 'completed' || job.output !== null).map((job) => [job.id, job]),
+  )
+  if (completedById.size === 0) return incoming
+
+  const incomingIds = new Set(incoming.imageJobs.map((job) => job.id))
+  const imageJobs = incoming.imageJobs.map((job) => completedById.get(job.id) ?? job)
+  for (const [id, job] of completedById) {
+    if (!incomingIds.has(id) && options.allowDeletedCompletedImageJobId !== id) imageJobs.push(job)
+  }
+  return { ...incoming, imageJobs }
+}
+
+export function writeProject(project: Project, options: WriteProjectOptions = {}): Promise<Project> {
   const stamped: Project = { ...project, updatedAt: new Date().toISOString() }
-  return enqueue(stamped.id, () => atomicWriteProject(stamped))
+  return enqueue(stamped.id, async () => {
+    let protectedProject = stamped
+    try {
+      const current = await readProject(stamped.id)
+      protectedProject = preserveCompletedImageJobs(current, stamped, options)
+    } catch (error) {
+      if (!(error instanceof ProjectNotFoundError)) throw error
+    }
+    return atomicWriteProject(protectedProject)
+  })
 }
 
 export async function createProject(input: { id: string; title: string; topic: string }): Promise<Project> {

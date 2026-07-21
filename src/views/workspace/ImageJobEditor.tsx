@@ -30,8 +30,10 @@ export function ImageJobEditor({
   const [missing, setMissing] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const stale = job.sourceDesignBriefUpdatedAt !== null && job.sourceDesignBriefUpdatedAt !== designBrief?.updatedAt
+  const immutable = job.status === 'completed' || job.output !== null
 
   function patch(fields: Partial<ImageJob>) {
+    if (immutable) return
     onChange({ ...job, ...fields, updatedAt: new Date().toISOString() })
   }
 
@@ -61,7 +63,11 @@ export function ImageJobEditor({
         </p>
       )}
 
-      <section className="idea-editor-group">
+      {immutable && (
+        <p className="empty-hint">This completed job is immutable. Duplicate it to create another variation.</p>
+      )}
+
+      <fieldset className="idea-editor-group" disabled={immutable}>
         <h3>Core</h3>
         <label className="field">
           Label
@@ -87,9 +93,9 @@ export function ImageJobEditor({
             ))}
           </select>
         </label>
-      </section>
+      </fieldset>
 
-      <section className="idea-editor-group">
+      <fieldset className="idea-editor-group" disabled={immutable}>
         <h3>Prompt</h3>
         <label className="field">
           Prompt
@@ -140,15 +146,12 @@ export function ImageJobEditor({
             />
           </label>
         </div>
-      </section>
+      </fieldset>
 
       <section className="idea-editor-group">
         <h3>Image</h3>
         {job.output ? (
           <>
-            <p className="empty-hint">
-              This job&apos;s image is completed and immutable. Duplicate the job to try a different image.
-            </p>
             {!missing && (
               <img
                 className="image-job-preview"

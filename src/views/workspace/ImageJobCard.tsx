@@ -16,6 +16,7 @@ type Props = {
 export function ImageJobCard({ projectId, job, designBrief, onEdit, onDuplicate, onDelete }: Props) {
   const [missing, setMissing] = useState(false)
   const stale = job.sourceDesignBriefUpdatedAt !== null && job.sourceDesignBriefUpdatedAt !== designBrief?.updatedAt
+  const immutable = job.status === 'completed' || job.output !== null
 
   return (
     <li className="idea-card">
@@ -44,7 +45,7 @@ export function ImageJobCard({ projectId, job, designBrief, onEdit, onDuplicate,
       </div>
       <div className="idea-card-actions">
         <button type="button" onClick={onEdit}>
-          Edit
+          {immutable ? 'View' : 'Edit'}
         </button>
         <button type="button" onClick={onDuplicate}>
           Duplicate

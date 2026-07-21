@@ -148,3 +148,61 @@ test('a completed image job with an output persists unchanged through save and r
   assert.equal(reloaded.imageJobs.length, 1)
   assert.deepEqual(reloaded.imageJobs[0], job)
 })
+
+test('ordinary project saves cannot edit or overwrite a completed image job', async () => {
+  const project = await createProject({ id: 'completed-job-immutable', title: 'Test', topic: 'hydroponics' })
+  const now = new Date().toISOString()
+  const job: ImageJob = {
+    id: 'completed-job',
+    sourceDesignBriefUpdatedAt: null,
+    purpose: 'custom',
+    label: 'Locked label',
+    status: 'completed',
+    prompt: 'locked prompt',
+    negativePrompt: '',
+    width: 1024,
+    height: 1024,
+    sourceType: 'imported',
+    output: {
+      fileName: '123e4567-e89b-42d3-a456-426614174000.png',
+      relativePath: 'assets/images/imported/123e4567-e89b-42d3-a456-426614174000.png',
+      generatedAt: now,
+    },
+    originalFilename: 'original.png',
+    createdAt: now,
+    updatedAt: now,
+  }
+  await writeProject({ ...project, imageJobs: [job] })
+
+  const loaded = await readProject(project.id)
+  await writeProject({ ...loaded, imageJobs: [{ ...loaded.imageJobs[0], label: 'Overwritten', prompt: 'changed' }] })
+  const reloaded = await readProject(project.id)
+  assert.deepEqual(reloaded.imageJobs[0], job)
+})
+
+test('ordinary project saves cannot remove a completed image job', async () => {
+  const project = await createProject({ id: 'completed-job-delete-guard', title: 'Test', topic: 'hydroponics' })
+  const now = new Date().toISOString()
+  const job: ImageJob = {
+    id: 'completed-job',
+    sourceDesignBriefUpdatedAt: null,
+    purpose: 'custom',
+    label: 'Locked label',
+    status: 'completed',
+    prompt: 'locked prompt',
+    negativePrompt: '',
+    width: 1024,
+    height: 1024,
+    sourceType: 'imported',
+    output: null,
+    originalFilename: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+  await writeProject({ ...project, imageJobs: [job] })
+  const loaded = await readProject(project.id)
+  await writeProject({ ...loaded, imageJobs: [] })
+  const reloaded = await readProject(project.id)
+  assert.equal(reloaded.imageJobs.length, 1)
+  assert.equal(reloaded.imageJobs[0].id, 'completed-job')
+})
