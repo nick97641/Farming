@@ -828,3 +828,67 @@ button:disabled {
 .image-job-dimensions .field {
   flex: 1;
 }
+
+.factuality-check {
+  border-width: 2px;
+}
+
+.factuality-pass {
+  border-color: var(--ok-text);
+}
+
+.factuality-blocked {
+  border-color: var(--warn-text);
+}
+
+.factuality-summary {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reference-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reference-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.reference-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  width: 180px;
+}
+
+.reference-card-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+.reference-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.variation-group {
+  list-style: none;
+}

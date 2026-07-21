@@ -12,6 +12,7 @@ import {
   getProjectDir,
   getProjectFilePath,
   getProjectsRoot,
+  getReferenceImagesDir,
 } from './paths.ts'
 import { normalizeLegacyProject } from './project-migration.ts'
 
@@ -77,6 +78,7 @@ async function scaffoldProjectFolders(projectId: string): Promise<void> {
   // otherwise mutates the filesystem outside project creation.
   await mkdir(getImportedImagesDir(projectId), { recursive: true })
   await mkdir(getGeneratedImagesDir(projectId), { recursive: true })
+  await mkdir(getReferenceImagesDir(projectId), { recursive: true })
 }
 
 // Validates before writing anything to disk, then writes to a temp file in the

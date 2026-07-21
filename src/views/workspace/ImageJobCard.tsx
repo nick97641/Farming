@@ -31,6 +31,8 @@ export function ImageJobCard({ projectId, job, designBrief, onEdit, onDuplicate,
           <span className="idea-card-sources">
             {job.width}×{job.height}
           </span>
+          {job.destination && <span className="idea-card-tag">{job.destination.label}</span>}
+          {job.output && <span className="idea-card-sources">seed {job.advancedSettings.seed}</span>}
         </div>
         {job.prompt && <p className="idea-card-summary">{job.prompt}</p>}
         {job.output && !missing && (

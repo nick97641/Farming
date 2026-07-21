@@ -1,6 +1,14 @@
 import { useState } from 'react'
 
-import type { DesignBrief, ImageJob } from '../../../shared/schema/project'
+import {
+  createDefaultAdvancedSettings,
+  type DesignBrief,
+  type ImageJob,
+  type ImageReferenceInfluence,
+  type ImageReferenceRole,
+} from '../../../shared/schema/project'
+import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../../shared/imageEnrichment'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../../shared/modelProfiles'
 import { duplicateImageJob } from '../../lib/imageJobOptions'
 import { ImageJobCard } from './ImageJobCard'
 import { ImageJobEditor } from './ImageJobEditor'
@@ -16,9 +24,16 @@ type Props = {
   importingJobId: string | null
   importError: string | null
   onDeleteJob: (jobId: string, label: string) => void
-  onGenerate: (jobId: string) => void
+  onGenerateVariations: (jobId: string, count: number) => void
   generatingJobId: string | null
+  generateProgressLabel: string | null
   generateError: string | null
+  onCancelGenerate: () => void
+  canCancelGenerate: boolean
+  onImportReference: (jobId: string, file: File, role: ImageReferenceRole, influence: ImageReferenceInfluence) => void
+  onRemoveReference: (jobId: string, referenceId: string) => void
+  referenceImportingJobId: string | null
+  referenceImportError: string | null
 }
 
 function createBlankJob(designBrief: DesignBrief | null): ImageJob {
@@ -36,6 +51,16 @@ function createBlankJob(designBrief: DesignBrief | null): ImageJob {
     sourceType: 'imported',
     output: null,
     originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: designBrief?.visualDirection ?? '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -52,9 +77,16 @@ export function ImageGenerationTab({
   importingJobId,
   importError,
   onDeleteJob,
-  onGenerate,
+  onGenerateVariations,
   generatingJobId,
+  generateProgressLabel,
   generateError,
+  onCancelGenerate,
+  canCancelGenerate,
+  onImportReference,
+  onRemoveReference,
+  referenceImportingJobId,
+  referenceImportError,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingJob = imageJobs.find((job) => job.id === editingId) ?? null
@@ -96,18 +128,31 @@ export function ImageGenerationTab({
         onImport={(file) => onImport(editingJob.id, file)}
         importing={importingJobId === editingJob.id}
         importError={importError}
-        onGenerate={() => onGenerate(editingJob.id)}
+        onGenerate={(count) => onGenerateVariations(editingJob.id, count)}
         generating={generatingJobId === editingJob.id}
+        generateProgressLabel={generatingJobId === editingJob.id ? generateProgressLabel : null}
         generateError={generateError}
+        onCancelGenerate={onCancelGenerate}
+        canCancelGenerate={canCancelGenerate && generatingJobId === editingJob.id}
+        onImportReference={(file, role, influence) => onImportReference(editingJob.id, file, role, influence)}
+        onRemoveReference={(referenceId) => onRemoveReference(editingJob.id, referenceId)}
+        referenceImporting={referenceImportingJobId === editingJob.id}
+        referenceImportError={referenceImportError}
+        onDuplicate={handleDuplicate}
       />
     )
   }
 
+  // Jobs generated together via "number of images" share a variationGroupId
+  // and are shown grouped; everything else (manual creates, plain
+  // duplicates, imports) shows as its own entry, same as before.
+  const seenGroups = new Set<string>()
+
   return (
     <div className="image-jobs-tab">
       <p className="tab-explanation">
-        Create covers, thumbnails, and illustrations with the local Draw Things app. Choose a purpose, auto-fill the
-        requirements, review the prompt, and generate with one explicit click. You can still import an existing image.
+        Describe the image, choose where it will be used, and generate with the local Draw Things app — no model
+        jargon required. Advanced settings are available per job if you need them.
       </p>
 
       <button type="button" onClick={handleCreate}>
@@ -118,17 +163,34 @@ export function ImageGenerationTab({
 
       {imageJobs.length > 0 && (
         <ul className="idea-list">
-          {imageJobs.map((job) => (
-            <ImageJobCard
-              key={job.id}
-              projectId={projectId}
-              job={job}
-              designBrief={designBrief}
-              onEdit={() => setEditingId(job.id)}
-              onDuplicate={() => handleDuplicate(job)}
-              onDelete={() => handleDelete(job)}
-            />
-          ))}
+          {imageJobs.map((job) => {
+            const isGrouped = job.variationGroupId !== null
+            const groupSiblings = isGrouped ? imageJobs.filter((j) => j.variationGroupId === job.variationGroupId) : [job]
+            if (isGrouped) {
+              if (seenGroups.has(job.variationGroupId as string)) return null
+              seenGroups.add(job.variationGroupId as string)
+            }
+            return (
+              <li key={job.variationGroupId ?? job.id} className="variation-group">
+                {isGrouped && groupSiblings.length > 1 && (
+                  <p className="field-hint">Variations ({groupSiblings.length})</p>
+                )}
+                <ul className="idea-list">
+                  {groupSiblings.map((sibling) => (
+                    <ImageJobCard
+                      key={sibling.id}
+                      projectId={projectId}
+                      job={sibling}
+                      designBrief={designBrief}
+                      onEdit={() => setEditingId(sibling.id)}
+                      onDuplicate={() => handleDuplicate(sibling)}
+                      onDelete={() => handleDelete(sibling)}
+                    />
+                  ))}
+                </ul>
+              </li>
+            )
+          })}
         </ul>
       )}
     </div>

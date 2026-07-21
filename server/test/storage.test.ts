@@ -6,7 +6,9 @@ import path from 'node:path'
 
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
 import { getGeneratedImagesDir, getImportedImagesDir } from '../lib/paths.ts'
-import type { Idea, ImageJob } from '../../shared/schema/project.ts'
+import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../shared/imageEnrichment.ts'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
+import { createDefaultAdvancedSettings, type Idea, type ImageJob } from '../../shared/schema/project.ts'
 
 let dataDir: string
 
@@ -138,6 +140,16 @@ test('a completed image job with an output persists unchanged through save and r
       generatedAt: now,
     },
     originalFilename: 'my-thumbnail.png',
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -169,6 +181,16 @@ test('ordinary project saves cannot edit or overwrite a completed image job', as
       generatedAt: now,
     },
     originalFilename: 'original.png',
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -196,6 +218,16 @@ test('ordinary project saves cannot remove a completed image job', async () => {
     sourceType: 'imported',
     output: null,
     originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
   }

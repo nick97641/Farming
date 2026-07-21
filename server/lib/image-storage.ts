@@ -3,13 +3,21 @@ import { randomBytes, randomUUID } from 'node:crypto'
 import path from 'node:path'
 
 import type { FileRef } from '../../shared/schema/project.ts'
+import { readImageDimensions } from './image-dimensions.ts'
 import {
   assertPathWithinDir,
   getGeneratedImagesDir,
   getImageJobsDir,
   getImportedImagesDir,
   getProjectDir,
+  getReferenceImagesDir,
 } from './paths.ts'
+
+const EXT_TO_MIME_TYPE: Record<string, string> = {
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  webp: 'image/webp',
+}
 
 export class ImageUploadValidationError extends Error {
   constructor(message: string) {
@@ -111,6 +119,48 @@ export async function saveGeneratedImageFile(input: { projectId: string; buffer:
   }
 }
 
+// Validates and writes a user-supplied reference photo into project-owned
+// storage, the same validation/naming/atomic-write rules as a manual import,
+// plus a best-effort dimension read (never a guess — null if it can't be
+// determined) and the sniffed MIME type. The original file the user picked on
+// their own machine is never modified — only these bytes are copied in.
+export async function importReferenceImage(input: {
+  projectId: string
+  buffer: Buffer
+}): Promise<{ output: FileRef; width: number | null; height: number | null; mimeType: string }> {
+  const { projectId, buffer } = input
+  if (buffer.length === 0) throw new ImageUploadValidationError('Uploaded file is empty')
+  if (buffer.length > MAX_IMAGE_BYTES) throw new ImageUploadValidationError('Uploaded file exceeds the 25MB limit')
+  const detected = detectImageType(buffer)
+  if (!detected) throw new ImageUploadValidationError('Uploaded file is not a recognized PNG, JPEG, or WEBP image')
+
+  const dir = getReferenceImagesDir(projectId)
+  await mkdir(dir, { recursive: true })
+  const fileName = `${randomUUID()}.${detected.ext}`
+  const destPath = assertPathWithinDir(getImageJobsDir(projectId), path.join(dir, fileName))
+  const tempPath = path.join(dir, `.tmp-${randomBytes(6).toString('hex')}`)
+
+  await writeFile(tempPath, buffer)
+  try {
+    await rename(tempPath, destPath)
+  } catch (error) {
+    await unlink(tempPath).catch(() => undefined)
+    throw error
+  }
+
+  const dimensions = readImageDimensions(buffer, detected.ext)
+  return {
+    output: {
+      fileName,
+      relativePath: path.relative(getProjectDir(projectId), destPath),
+      generatedAt: new Date().toISOString(),
+    },
+    width: dimensions?.width ?? null,
+    height: dimensions?.height ?? null,
+    mimeType: EXT_TO_MIME_TYPE[detected.ext] ?? 'application/octet-stream',
+  }
+}
+
 // Resolves a stored relativePath to a real, on-disk absolute path, verifying
 // containment both lexically (against `../` traversal) and after symlink
 // resolution (against a symlink that points outside the allowed directory).
@@ -157,7 +207,9 @@ export function getOwnedImageFileKey(projectId: string, output: FileRef): string
   }
 
   const parent = path.dirname(candidate)
-  const allowedParents = [getImportedImagesDir(projectId), getGeneratedImagesDir(projectId)].map((dir) => path.resolve(dir))
+  const allowedParents = [getImportedImagesDir(projectId), getGeneratedImagesDir(projectId), getReferenceImagesDir(projectId)].map(
+    (dir) => path.resolve(dir),
+  )
   if (!allowedParents.includes(parent)) return null
   if (path.basename(candidate) !== output.fileName) return null
   if (!OWNED_IMAGE_FILE_NAME.test(output.fileName)) return null

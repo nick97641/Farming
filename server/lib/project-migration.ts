@@ -1,11 +1,25 @@
+import { ENRICHMENT_POLICY_VERSION, ENRICHMENT_PROFILE_VERSION } from '../../shared/imageEnrichment.ts'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
 import {
   ConfidenceSchema,
+  createDefaultAdvancedSettings,
   DesignBriefStatusSchema,
+  FactualityCheckStatusSchema,
   IdeaContentTypeSchema,
   IdeaStatusSchema,
+  ImageContainerTransparencySchema,
+  ImageControlTypeSchema,
+  ImageDestinationCropBehaviorSchema,
+  ImageDestinationOrientationSchema,
+  ImageFactCategorySchema,
+  ImageFactRequirementSchema,
+  ImageFactSourceSchema,
   ImageJobPurposeSchema,
   ImageJobSourceTypeSchema,
   ImageJobStatusSchema,
+  ImageReferenceInfluenceSchema,
+  ImageReferenceRoleSchema,
+  ImageSeedModeSchema,
 } from '../../shared/schema/project.ts'
 
 type PlainRecord = Record<string, unknown>
@@ -21,6 +35,17 @@ const VALID_DESIGN_BRIEF_STATUSES = new Set<string>(DesignBriefStatusSchema.opti
 const VALID_IMAGE_JOB_PURPOSES = new Set<string>(ImageJobPurposeSchema.options)
 const VALID_IMAGE_JOB_STATUSES = new Set<string>(ImageJobStatusSchema.options)
 const VALID_IMAGE_JOB_SOURCE_TYPES = new Set<string>(ImageJobSourceTypeSchema.options)
+const VALID_IMAGE_FACT_CATEGORIES = new Set<string>(ImageFactCategorySchema.options)
+const VALID_IMAGE_FACT_SOURCES = new Set<string>(ImageFactSourceSchema.options)
+const VALID_IMAGE_FACT_REQUIREMENTS = new Set<string>(ImageFactRequirementSchema.options)
+const VALID_CONTAINER_TRANSPARENCIES = new Set<string>(ImageContainerTransparencySchema.options)
+const VALID_FACTUALITY_STATUSES = new Set<string>(FactualityCheckStatusSchema.options)
+const VALID_REFERENCE_ROLES = new Set<string>(ImageReferenceRoleSchema.options)
+const VALID_REFERENCE_INFLUENCES = new Set<string>(ImageReferenceInfluenceSchema.options)
+const VALID_CONTROL_TYPES = new Set<string>(ImageControlTypeSchema.options)
+const VALID_DESTINATION_ORIENTATIONS = new Set<string>(ImageDestinationOrientationSchema.options)
+const VALID_DESTINATION_CROP_BEHAVIORS = new Set<string>(ImageDestinationCropBehaviorSchema.options)
+const VALID_SEED_MODES = new Set<string>(ImageSeedModeSchema.options)
 
 // Upgrades an older flat string[] list (from before the confidence field
 // existed) into the current { text, confidence }[] shape. Anything already in
@@ -116,6 +141,199 @@ function normalizeFileRef(raw: unknown): unknown {
   return { fileName: raw.fileName, relativePath: raw.relativePath, generatedAt: raw.generatedAt }
 }
 
+function normalizeStructuredRequirements(raw: unknown): unknown {
+  const source = isRecord(raw) ? raw : {}
+  return {
+    plantCount:
+      typeof source.plantCount === 'number' && Number.isInteger(source.plantCount) && source.plantCount >= 0
+        ? source.plantCount
+        : null,
+    plantSpecies: typeof source.plantSpecies === 'string' ? source.plantSpecies : '',
+    hydroponicMethod: typeof source.hydroponicMethod === 'string' ? source.hydroponicMethod : '',
+    containerType: typeof source.containerType === 'string' ? source.containerType : '',
+    containerTransparency:
+      typeof source.containerTransparency === 'string' && VALID_CONTAINER_TRANSPARENCIES.has(source.containerTransparency)
+        ? source.containerTransparency
+        : 'unspecified',
+    waterline: typeof source.waterline === 'string' ? source.waterline : '',
+    airGap: typeof source.airGap === 'string' ? source.airGap : '',
+    submergedRootRegion: typeof source.submergedRootRegion === 'string' ? source.submergedRootRegion : '',
+    dryRootRegion: typeof source.dryRootRegion === 'string' ? source.dryRootRegion : '',
+    crownPosition: typeof source.crownPosition === 'string' ? source.crownPosition : '',
+    viewingAngle: typeof source.viewingAngle === 'string' ? source.viewingAngle : '',
+    allowVisibleText: typeof source.allowVisibleText === 'boolean' ? source.allowVisibleText : false,
+  }
+}
+
+// A fact lock with a missing id, category, statement, source, or requirement
+// carries no reliable meaning, so the whole entry is dropped rather than
+// repaired — the same reasoning as a malformed designBrief or FileRef.
+function normalizeFactLock(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.id !== 'string' || typeof raw.statement !== 'string') return null
+  if (typeof raw.category !== 'string' || !VALID_IMAGE_FACT_CATEGORIES.has(raw.category)) return null
+  if (typeof raw.source !== 'string' || !VALID_IMAGE_FACT_SOURCES.has(raw.source)) return null
+  if (typeof raw.requirement !== 'string' || !VALID_IMAGE_FACT_REQUIREMENTS.has(raw.requirement)) return null
+  return {
+    id: raw.id,
+    category: raw.category,
+    statement: raw.statement,
+    source: raw.source,
+    requirement: raw.requirement,
+    locked: typeof raw.locked === 'boolean' ? raw.locked : true,
+  }
+}
+
+function normalizeEnrichmentConflict(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.id !== 'string' || typeof raw.description !== 'string') return null
+  return {
+    id: raw.id,
+    description: raw.description,
+    factIds: Array.isArray(raw.factIds) ? raw.factIds.filter((v): v is string => typeof v === 'string') : [],
+  }
+}
+
+function normalizeEnrichmentResult(raw: unknown): unknown {
+  const source = isRecord(raw) ? raw : {}
+  const stringArray = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [])
+  return {
+    requiredFacts: stringArray(source.requiredFacts),
+    prohibitedElements: stringArray(source.prohibitedElements),
+    stylingAdditions: stringArray(source.stylingAdditions),
+    unresolvedDetails: stringArray(source.unresolvedDetails),
+    conflicts: Array.isArray(source.conflicts)
+      ? source.conflicts.map(normalizeEnrichmentConflict).filter((c): c is NonNullable<typeof c> => c !== null)
+      : [],
+    enrichedPrompt: typeof source.enrichedPrompt === 'string' ? source.enrichedPrompt : '',
+    enrichedNegativePrompt: typeof source.enrichedNegativePrompt === 'string' ? source.enrichedNegativePrompt : '',
+    policyVersion: typeof source.policyVersion === 'string' ? source.policyVersion : ENRICHMENT_POLICY_VERSION,
+    profileVersion: typeof source.profileVersion === 'string' ? source.profileVersion : ENRICHMENT_PROFILE_VERSION,
+  }
+}
+
+function normalizeFactualityCheck(raw: unknown): unknown {
+  const source = isRecord(raw) ? raw : {}
+  const stringArray = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [])
+  return {
+    status: typeof source.status === 'string' && VALID_FACTUALITY_STATUSES.has(source.status) ? source.status : 'blocked',
+    requiredFactsPreserved: typeof source.requiredFactsPreserved === 'boolean' ? source.requiredFactsPreserved : false,
+    noContradictions: typeof source.noContradictions === 'boolean' ? source.noContradictions : false,
+    noUnsupportedAdditions: typeof source.noUnsupportedAdditions === 'boolean' ? source.noUnsupportedAdditions : false,
+    unresolvedDetails: stringArray(source.unresolvedDetails),
+    blockingReasons: stringArray(source.blockingReasons),
+    checkedAt: typeof source.checkedAt === 'string' ? source.checkedAt : new Date().toISOString(),
+  }
+}
+
+// A recipe is the complete factuality record a completed job must retain —
+// missing its policy/profile version or its factLocks array means it can't
+// be trusted as a record of what governed that job, so (like designBrief and
+// FileRef) a structurally incomplete one is dropped back to null rather than
+// partially repaired.
+function normalizeEnrichmentRecipe(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.policyVersion !== 'string' || typeof raw.profileVersion !== 'string') return null
+  if (!Array.isArray(raw.factLocks)) return null
+
+  return {
+    policyVersion: raw.policyVersion,
+    profileVersion: raw.profileVersion,
+    originalDescription: typeof raw.originalDescription === 'string' ? raw.originalDescription : '',
+    structuredRequirements: normalizeStructuredRequirements(raw.structuredRequirements),
+    factLocks: raw.factLocks.map(normalizeFactLock).filter((f): f is NonNullable<typeof f> => f !== null),
+    result: normalizeEnrichmentResult(raw.result),
+    factualityCheck: normalizeFactualityCheck(raw.factualityCheck),
+    updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : new Date().toISOString(),
+  }
+}
+
+// "Destination" is formatting metadata only — a malformed snapshot is
+// dropped to null (no destination selected) rather than repaired, same
+// reasoning as a malformed designBrief or FileRef.
+function normalizeImageDestination(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.presetId !== 'string' || typeof raw.presetVersion !== 'string' || typeof raw.label !== 'string') {
+    return null
+  }
+  const aspectRatio = isRecord(raw.aspectRatio) ? raw.aspectRatio : {}
+  return {
+    presetId: raw.presetId,
+    presetVersion: raw.presetVersion,
+    label: raw.label,
+    aspectRatio: {
+      width: typeof aspectRatio.width === 'number' ? aspectRatio.width : 1,
+      height: typeof aspectRatio.height === 'number' ? aspectRatio.height : 1,
+    },
+    orientation:
+      typeof raw.orientation === 'string' && VALID_DESTINATION_ORIENTATIONS.has(raw.orientation) ? raw.orientation : 'square',
+    exportWidth: typeof raw.exportWidth === 'number' && raw.exportWidth > 0 ? raw.exportWidth : 1024,
+    exportHeight: typeof raw.exportHeight === 'number' && raw.exportHeight > 0 ? raw.exportHeight : 1024,
+    compositionGuidance: typeof raw.compositionGuidance === 'string' ? raw.compositionGuidance : '',
+    centerImportantContent: typeof raw.centerImportantContent === 'boolean' ? raw.centerImportantContent : true,
+    cropBehavior:
+      typeof raw.cropBehavior === 'string' && VALID_DESTINATION_CROP_BEHAVIORS.has(raw.cropBehavior) ? raw.cropBehavior : 'none',
+  }
+}
+
+// A reference with no valid id/output can't be addressed or served, so
+// (matching ImageJob's own id rule) it's dropped rather than repaired.
+function normalizeImageReference(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw.id !== 'string') return null
+  const output = normalizeFileRef(raw.output)
+  if (!output) return null
+  return {
+    id: raw.id,
+    role: typeof raw.role === 'string' && VALID_REFERENCE_ROLES.has(raw.role) ? raw.role : 'general-inspiration',
+    influence: typeof raw.influence === 'string' && VALID_REFERENCE_INFLUENCES.has(raw.influence) ? raw.influence : 'medium',
+    output,
+    originalFilename: typeof raw.originalFilename === 'string' ? raw.originalFilename : null,
+    width: typeof raw.width === 'number' && raw.width > 0 ? raw.width : null,
+    height: typeof raw.height === 'number' && raw.height > 0 ? raw.height : null,
+    mimeType: typeof raw.mimeType === 'string' ? raw.mimeType : 'application/octet-stream',
+    addedAt: typeof raw.addedAt === 'string' ? raw.addedAt : new Date().toISOString(),
+  }
+}
+
+function normalizeImageControl(raw: unknown): unknown {
+  if (!isRecord(raw) || typeof raw.id !== 'string' || typeof raw.referenceId !== 'string') return null
+  if (typeof raw.type !== 'string' || !VALID_CONTROL_TYPES.has(raw.type)) return null
+  return {
+    id: raw.id,
+    type: raw.type,
+    referenceId: raw.referenceId,
+    weight: typeof raw.weight === 'number' ? raw.weight : 1,
+    preprocessing: typeof raw.preprocessing === 'boolean' ? raw.preprocessing : true,
+    start: typeof raw.start === 'number' ? raw.start : 0,
+    end: typeof raw.end === 'number' ? raw.end : 1,
+  }
+}
+
+function normalizeAdvancedSettings(raw: unknown): unknown {
+  const source = isRecord(raw) ? raw : {}
+  const defaults = createDefaultAdvancedSettings()
+  return {
+    sampler: typeof source.sampler === 'string' ? source.sampler : defaults.sampler,
+    scheduler: typeof source.scheduler === 'string' ? source.scheduler : defaults.scheduler,
+    steps: typeof source.steps === 'number' ? source.steps : defaults.steps,
+    guidanceScale: typeof source.guidanceScale === 'number' ? source.guidanceScale : defaults.guidanceScale,
+    seed: typeof source.seed === 'number' ? source.seed : defaults.seed,
+    seedMode: typeof source.seedMode === 'string' && VALID_SEED_MODES.has(source.seedMode) ? source.seedMode : defaults.seedMode,
+    clipSkip: typeof source.clipSkip === 'number' ? source.clipSkip : defaults.clipSkip,
+    shift: typeof source.shift === 'number' ? source.shift : defaults.shift,
+    refinerEnabled: typeof source.refinerEnabled === 'boolean' ? source.refinerEnabled : defaults.refinerEnabled,
+    upscalerEnabled: typeof source.upscalerEnabled === 'boolean' ? source.upscalerEnabled : defaults.upscalerEnabled,
+    highResFixEnabled: typeof source.highResFixEnabled === 'boolean' ? source.highResFixEnabled : defaults.highResFixEnabled,
+    faceRestorationEnabled:
+      typeof source.faceRestorationEnabled === 'boolean' ? source.faceRestorationEnabled : defaults.faceRestorationEnabled,
+    sharpness: typeof source.sharpness === 'number' ? source.sharpness : defaults.sharpness,
+    tiledDecodingEnabled:
+      typeof source.tiledDecodingEnabled === 'boolean' ? source.tiledDecodingEnabled : defaults.tiledDecodingEnabled,
+    tiledDiffusionEnabled:
+      typeof source.tiledDiffusionEnabled === 'boolean' ? source.tiledDiffusionEnabled : defaults.tiledDiffusionEnabled,
+  }
+}
+
 // An ImageJob with no valid id can't be addressed by any edit/delete/import
 // action, so unlike an idea's historical id-defaults-to-'' fallback, a job
 // missing its id is dropped from the array entirely rather than kept with a
@@ -140,6 +358,20 @@ function normalizeImageJob(raw: unknown): unknown {
       typeof raw.sourceType === 'string' && VALID_IMAGE_JOB_SOURCE_TYPES.has(raw.sourceType) ? raw.sourceType : 'imported',
     output: normalizeFileRef(raw.output),
     originalFilename: typeof raw.originalFilename === 'string' ? raw.originalFilename : null,
+    policyVersion: typeof raw.policyVersion === 'string' ? raw.policyVersion : ENRICHMENT_POLICY_VERSION,
+    userDescription: typeof raw.userDescription === 'string' ? raw.userDescription : '',
+    structuredRequirements: normalizeStructuredRequirements(raw.structuredRequirements),
+    enrichmentRecipe: normalizeEnrichmentRecipe(raw.enrichmentRecipe),
+    destination: normalizeImageDestination(raw.destination),
+    references: Array.isArray(raw.references)
+      ? raw.references.map(normalizeImageReference).filter((r): r is NonNullable<typeof r> => r !== null)
+      : [],
+    modelProfileId: typeof raw.modelProfileId === 'string' ? raw.modelProfileId : DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: normalizeAdvancedSettings(raw.advancedSettings),
+    controls: Array.isArray(raw.controls)
+      ? raw.controls.map(normalizeImageControl).filter((c): c is NonNullable<typeof c> => c !== null)
+      : [],
+    variationGroupId: typeof raw.variationGroupId === 'string' ? raw.variationGroupId : null,
     createdAt,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : createdAt,
   }

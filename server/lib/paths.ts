@@ -48,6 +48,10 @@ export function getGeneratedImagesDir(projectId: string): string {
   return path.join(getImageJobsDir(projectId), 'generated')
 }
 
+export function getReferenceImagesDir(projectId: string): string {
+  return path.join(getImageJobsDir(projectId), 'references')
+}
+
 export class PathEscapeError extends Error {
   constructor(candidatePath: string) {
     super(`Path "${candidatePath}" escapes its allowed directory`)

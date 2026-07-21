@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 
-import type { Idea, Project } from '../../shared/schema/project'
+import type { Idea, ImageReferenceInfluence, ImageReferenceRole, Project } from '../../shared/schema/project'
 import {
   deleteImageJob as apiDeleteImageJob,
   deleteProject,
+  deleteReferencePhoto as apiDeleteReferencePhoto,
   generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
   getProject,
   importImageJobFile as apiImportImageJobFile,
+  importReferencePhoto as apiImportReferencePhoto,
   organizeResearch as apiOrganizeResearch,
   saveProject,
 } from '../lib/api'
+import { duplicateImageJob } from '../lib/imageJobOptions'
 import { DesignBriefTab } from './workspace/DesignBriefTab'
 import { IdeasTab } from './workspace/IdeasTab'
 import { ImageGenerationTab } from './workspace/ImageGenerationTab'
@@ -55,8 +58,13 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [importImageError, setImportImageError] = useState<string | null>(null)
   const [generatingImageJobId, setGeneratingImageJobId] = useState<string | null>(null)
   const [generateImageError, setGenerateImageError] = useState<string | null>(null)
+  const [generateProgressLabel, setGenerateProgressLabel] = useState<string | null>(null)
+  const [canCancelGenerate, setCanCancelGenerate] = useState(false)
+  const [referenceImportingJobId, setReferenceImportingJobId] = useState<string | null>(null)
+  const [referenceImportError, setReferenceImportError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
+  const cancelGenerateRef = useRef(false)
 
   useEffect(() => {
     skipNextSave.current = true
@@ -69,6 +77,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setPendingGeneratedIdeas([])
     setImportImageError(null)
     setGenerateImageError(null)
+    setReferenceImportError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -209,22 +218,104 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
-  async function handleGenerateImageJob(jobId: string) {
+  // "Number of images" generates through this same foreground request flow,
+  // one at a time, sequentially — never a batch endpoint or background
+  // worker. The original job is generated first; each additional variation
+  // is a fresh duplicate (its own id, its own seed, no output yet) that is
+  // saved before being generated, so nothing is ever overwritten and every
+  // variation is independently addressable. All siblings created by one
+  // request share a variationGroupId purely for display grouping.
+  async function handleGenerateVariations(jobId: string, count: number) {
     if (!project) return
     setGeneratingImageJobId(jobId)
     setGenerateImageError(null)
+    setGenerateProgressLabel(count > 1 ? `Generating image 1 of ${count}` : null)
+    setCanCancelGenerate(count > 1)
+    cancelGenerateRef.current = false
+
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      let currentProject = await saveProject(project)
+      skipNextSave.current = true
+      setProject(currentProject)
+
+      const originalJob = currentProject.imageJobs.find((job) => job.id === jobId)
+      if (!originalJob) return
+
+      const groupId = count > 1 ? crypto.randomUUID() : originalJob.variationGroupId
+      if (groupId !== originalJob.variationGroupId) {
+        currentProject = await saveProject({
+          ...currentProject,
+          imageJobs: currentProject.imageJobs.map((job) => (job.id === jobId ? { ...job, variationGroupId: groupId } : job)),
+        })
+        skipNextSave.current = true
+        setProject(currentProject)
+      }
+
+      for (let index = 0; index < count; index += 1) {
+        if (cancelGenerateRef.current) break
+        setGenerateProgressLabel(`Generating image ${index + 1} of ${count}`)
+
+        let targetJobId = jobId
+        if (index > 0) {
+          const source = currentProject.imageJobs.find((job) => job.id === jobId)
+          if (!source) break
+          const duplicate = duplicateImageJob(source, { variationGroupId: groupId })
+          currentProject = await saveProject({ ...currentProject, imageJobs: [...currentProject.imageJobs, duplicate] })
+          skipNextSave.current = true
+          setProject(currentProject)
+          targetJobId = duplicate.id
+        }
+
+        setGeneratingImageJobId(targetJobId)
+        currentProject = await apiGenerateImageJob(currentProject.id, targetJobId)
+        skipNextSave.current = true
+        setProject(currentProject)
+      }
+    } catch (err) {
+      setGenerateImageError(err instanceof Error ? err.message : 'Failed to generate image with Draw Things')
+    } finally {
+      setGeneratingImageJobId(null)
+      setGenerateProgressLabel(null)
+      setCanCancelGenerate(false)
+    }
+  }
+
+  function handleCancelGenerate() {
+    cancelGenerateRef.current = true
+  }
+
+  async function handleImportReference(jobId: string, file: File, role: ImageReferenceRole, influence: ImageReferenceInfluence) {
+    if (!project) return
+    setReferenceImportingJobId(jobId)
+    setReferenceImportError(null)
     try {
       if (saveTimer.current) clearTimeout(saveTimer.current)
       await saveProject(project)
       setSaveState('saved')
 
-      const updated = await apiGenerateImageJob(project.id, jobId)
+      const updated = await apiImportReferencePhoto(project.id, jobId, file, role, influence)
       skipNextSave.current = true
       setProject(updated)
     } catch (err) {
-      setGenerateImageError(err instanceof Error ? err.message : 'Failed to generate image with Draw Things')
+      setReferenceImportError(err instanceof Error ? err.message : 'Failed to add reference photo')
     } finally {
-      setGeneratingImageJobId(null)
+      setReferenceImportingJobId(null)
+    }
+  }
+
+  async function handleRemoveReference(jobId: string, referenceId: string) {
+    if (!project) return
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const updated = await apiDeleteReferencePhoto(project.id, jobId, referenceId)
+      skipNextSave.current = true
+      setProject(updated)
+    } catch (err) {
+      setReferenceImportError(err instanceof Error ? err.message : 'Failed to remove reference photo')
     }
   }
 
@@ -328,9 +419,16 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             importingJobId={importingImageJobId}
             importError={importImageError}
             onDeleteJob={handleDeleteImageJob}
-            onGenerate={handleGenerateImageJob}
+            onGenerateVariations={handleGenerateVariations}
             generatingJobId={generatingImageJobId}
+            generateProgressLabel={generateProgressLabel}
             generateError={generateImageError}
+            onCancelGenerate={handleCancelGenerate}
+            canCancelGenerate={canCancelGenerate}
+            onImportReference={handleImportReference}
+            onRemoveReference={handleRemoveReference}
+            referenceImportingJobId={referenceImportingJobId}
+            referenceImportError={referenceImportError}
           />
         )}
       </div>

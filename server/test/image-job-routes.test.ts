@@ -11,7 +11,9 @@ import express from 'express'
 
 import { imageJobsRouter } from '../routes/image-jobs.ts'
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
-import type { ImageJob, Project } from '../../shared/schema/project.ts'
+import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION, enrichImageRequest } from '../../shared/imageEnrichment.ts'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
+import { createDefaultAdvancedSettings, type ImageJob, type Project } from '../../shared/schema/project.ts'
 
 let dataDir: string
 let server: Server
@@ -57,6 +59,16 @@ async function createProjectWithJob(overrides: Partial<ImageJob> = {}): Promise<
     sourceType: 'imported',
     output: null,
     originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: 'a prompt',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
     ...overrides,
@@ -276,6 +288,16 @@ test('deleting a job leaves a non-owned legacy-named file untouched', async () =
       generatedAt: now,
     },
     originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: now,
     updatedAt: now,
   }
@@ -290,4 +312,33 @@ test('deleting an unknown job ID returns 404', async () => {
   const { project } = await createProjectWithJob()
   const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/does-not-exist`, { method: 'DELETE' })
   assert.equal(res.status, 404)
+})
+
+test('generate is blocked by the server-side factuality gate when a locked fact is missing from the prompt, independent of the client', async () => {
+  const recipe = enrichImageRequest({
+    userDescription: '',
+    freeformNegativePrompt: '',
+    structuredRequirements: { ...createDefaultStructuredRequirements(), plantCount: 1, plantSpecies: 'lettuce' },
+    now: new Date().toISOString(),
+  })
+  const { project, job } = await createProjectWithJob({
+    // The effective prompt no longer mentions the locked "Exactly 1 plant"
+    // fact — simulates a hand-edit made after enrichment ran.
+    prompt: 'a bucket photo',
+    negativePrompt: '',
+    enrichmentRecipe: recipe,
+  })
+  const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/generate`, { method: 'POST' })
+  assert.equal(res.status, 409)
+  const body = (await res.json()) as { error: string; factualityCheck: { status: string; blockingReasons: string[] } }
+  assert.equal(body.error, 'Factuality check failed')
+  assert.equal(body.factualityCheck.status, 'blocked')
+  assert.ok(body.factualityCheck.blockingReasons.some((r) => r.includes('Exactly 1 plant')))
+
+  // The job must remain untouched — still draft, still no output — since
+  // generation never actually ran.
+  const reloaded = await readProject(project.id)
+  const reloadedJob = reloaded.imageJobs.find((j) => j.id === job.id)
+  assert.equal(reloadedJob?.status, 'draft')
+  assert.equal(reloadedJob?.output, null)
 })

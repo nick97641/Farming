@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { normalizeLegacyProject } from '../lib/project-migration.ts'
-import { ProjectSchema } from '../../shared/schema/project.ts'
+import { createDefaultAdvancedSettings, ProjectSchema } from '../../shared/schema/project.ts'
+import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../shared/imageEnrichment.ts'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
 import { readProject } from '../lib/storage.ts'
 import { getProjectDir, getProjectFilePath } from '../lib/paths.ts'
 
@@ -249,6 +251,221 @@ test('normalizeLegacyProject drops a malformed image job output (missing a requi
   }
   const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
   assert.equal(normalized.imageJobs[0].output, null)
+})
+
+test('normalizeLegacyProject defaults every checkpoint-B field on a bare pre-checkpoint image job, and the result is schema-valid', () => {
+  const raw = { id: 'legacy-16', research: {}, ideas: [], imageJobs: [{ id: 'job-bare' }] }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+
+  assert.equal(job.policyVersion, ENRICHMENT_POLICY_VERSION)
+  assert.equal(job.userDescription, '')
+  assert.deepEqual(job.structuredRequirements, createDefaultStructuredRequirements())
+  assert.equal(job.enrichmentRecipe, null)
+  assert.equal(job.destination, null)
+  assert.deepEqual(job.references, [])
+  assert.equal(job.modelProfileId, DEFAULT_MODEL_PROFILE_ID)
+  assert.deepEqual(job.advancedSettings, createDefaultAdvancedSettings())
+  assert.deepEqual(job.controls, [])
+  assert.equal(job.variationGroupId, null)
+
+  const validated = ProjectSchema.shape.imageJobs.element.safeParse(job)
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject drops a malformed enrichmentRecipe (missing policyVersion/profileVersion/factLocks) back to null', () => {
+  const raw = {
+    id: 'legacy-17',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-bad-recipe', enrichmentRecipe: { originalDescription: 'a plant' } }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  assert.equal(normalized.imageJobs[0].enrichmentRecipe, null)
+})
+
+test('normalizeLegacyProject preserves a structurally valid enrichmentRecipe and drops malformed nested factLocks/conflicts entries within it', () => {
+  const raw = {
+    id: 'legacy-18',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-recipe',
+        enrichmentRecipe: {
+          policyVersion: ENRICHMENT_POLICY_VERSION,
+          profileVersion: 'hydroponic-v1',
+          originalDescription: 'a plant',
+          structuredRequirements: { plantCount: 'not-a-number', containerTransparency: 'sideways' },
+          factLocks: [
+            { id: 'fact-1', category: 'plant-count', statement: 'Exactly 1 plant', source: 'structured-setting', requirement: 'required' },
+            { id: 'fact-bad', category: 'not-a-real-category', statement: 'x', source: 'user', requirement: 'required' },
+            { label: 'no id or category at all' },
+          ],
+          result: { requiredFacts: ['Exactly 1 plant', 42], enrichedPrompt: 'Exactly 1 plant.' },
+          factualityCheck: { status: 'not-a-real-status' },
+        },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+  const recipe = job.enrichmentRecipe as Record<string, unknown>
+
+  assert.equal(recipe.policyVersion, ENRICHMENT_POLICY_VERSION)
+  // Malformed structured requirement values fall back to their defaults.
+  assert.equal((recipe.structuredRequirements as { plantCount: unknown }).plantCount, null)
+  assert.equal((recipe.structuredRequirements as { containerTransparency: unknown }).containerTransparency, 'unspecified')
+  // Only the structurally valid fact lock survives.
+  const factLocks = recipe.factLocks as Record<string, unknown>[]
+  assert.equal(factLocks.length, 1)
+  assert.equal(factLocks[0].id, 'fact-1')
+  // A non-string entry in requiredFacts is filtered out rather than kept or crashing.
+  assert.deepEqual((recipe.result as { requiredFacts: unknown }).requiredFacts, ['Exactly 1 plant'])
+  // An invalid factuality status falls back to the safe "blocked" default.
+  assert.equal((recipe.factualityCheck as { status: unknown }).status, 'blocked')
+
+  const validated = ProjectSchema.shape.imageJobs.element.safeParse(job)
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject drops a malformed destination snapshot (missing presetId/presetVersion/label) back to null', () => {
+  const raw = {
+    id: 'legacy-19',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-bad-destination', destination: { label: 'Instagram' } }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  assert.equal(normalized.imageJobs[0].destination, null)
+})
+
+test('normalizeLegacyProject repairs an incomplete but structurally-addressable destination with safe defaults', () => {
+  const raw = {
+    id: 'legacy-20',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-partial-destination',
+        destination: { presetId: 'custom', presetVersion: 'destination-presets-v1', label: 'Custom dimensions' },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+  const destination = job.destination as Record<string, unknown>
+  assert.equal(destination.orientation, 'square')
+  assert.equal(destination.exportWidth, 1024)
+  assert.equal(destination.cropBehavior, 'none')
+  assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(job).success)
+})
+
+test('normalizeLegacyProject drops references with no valid id or output, keeping the valid ones', () => {
+  const raw = {
+    id: 'legacy-21',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-refs',
+        references: [
+          {
+            id: 'ref-good',
+            role: 'match-subject',
+            influence: 'high',
+            output: { fileName: 'a.png', relativePath: 'assets/images/references/a.png', generatedAt: '2024-01-01T00:00:00.000Z' },
+          },
+          { id: 'ref-no-output' },
+          { role: 'match-style' }, // no id at all
+        ],
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+  const references = job.references as Record<string, unknown>[]
+  assert.equal(references.length, 1)
+  assert.equal(references[0].id, 'ref-good')
+  assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(job).success)
+})
+
+test('normalizeLegacyProject falls back an unrecognized reference role/influence to a safe default instead of dropping the reference', () => {
+  const raw = {
+    id: 'legacy-22',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-ref-bad-enum',
+        references: [
+          {
+            id: 'ref-1',
+            role: 'not-a-real-role',
+            influence: 'extreme',
+            output: { fileName: 'a.png', relativePath: 'assets/images/references/a.png', generatedAt: '2024-01-01T00:00:00.000Z' },
+          },
+        ],
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const reference = (normalized.imageJobs[0].references as Record<string, unknown>[])[0]
+  assert.equal(reference.role, 'general-inspiration')
+  assert.equal(reference.influence, 'medium')
+})
+
+test('normalizeLegacyProject drops controls with no valid id/referenceId/type, keeping the valid ones', () => {
+  const raw = {
+    id: 'legacy-23',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-controls',
+        controls: [
+          { id: 'control-good', type: 'canny', referenceId: 'ref-1', weight: 0.5, preprocessing: true, start: 0, end: 1 },
+          { id: 'control-bad-type', type: 'not-a-real-type', referenceId: 'ref-1' },
+          { referenceId: 'ref-1' }, // no id
+        ],
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const job = normalized.imageJobs[0]
+  const controls = job.controls as Record<string, unknown>[]
+  assert.equal(controls.length, 1)
+  assert.equal(controls[0].id, 'control-good')
+  assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(job).success)
+})
+
+test('normalizeLegacyProject repairs advancedSettings field-by-field, keeping valid values and defaulting only invalid ones', () => {
+  const raw = {
+    id: 'legacy-24',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-advanced',
+        advancedSettings: {
+          sampler: 'euler',
+          steps: 'not-a-number',
+          seedMode: 'sideways',
+          refinerEnabled: 'yes',
+        },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const settings = normalized.imageJobs[0].advancedSettings as Record<string, unknown>
+  const defaults = createDefaultAdvancedSettings()
+  // A structurally valid value already present is preserved, not overwritten.
+  assert.equal(settings.sampler, 'euler')
+  // Invalid values fall back field-by-field to the default, not the whole object.
+  assert.equal(settings.steps, defaults.steps)
+  assert.equal(settings.seedMode, defaults.seedMode)
+  assert.equal(settings.refinerEnabled, defaults.refinerEnabled)
+  assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(normalized.imageJobs[0]).success)
 })
 
 let dataDir: string

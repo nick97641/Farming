@@ -234,6 +234,242 @@ export type ImageJobSourceType = z.infer<typeof ImageJobSourceTypeSchema>
 // reusing or overwriting this one. "Missing file" is deliberately not a
 // status here — it's a display-time fact about the filesystem, checked by
 // the client, never persisted.
+// The only sources of fact the enrichment engine (governed by
+// factual-image-enrichment-v1, see shared/imageEnrichment.ts) is ever allowed
+// to treat as authoritative. 'reference-metadata' has no producing UI yet —
+// kept for forward compatibility the same way 'generated' existed on
+// ImageJobSourceTypeSchema before Draw Things generation did.
+export const ImageFactSourceSchema = z.enum(['user', 'structured-setting', 'reference-metadata'])
+export type ImageFactSource = z.infer<typeof ImageFactSourceSchema>
+
+export const ImageFactRequirementSchema = z.enum(['required', 'prohibited'])
+export type ImageFactRequirement = z.infer<typeof ImageFactRequirementSchema>
+
+// The hydroponic-image fact-locking candidates identified by policy review.
+export const ImageFactCategorySchema = z.enum([
+  'plant-count',
+  'plant-species',
+  'hydroponic-method',
+  'container-type',
+  'container-transparency',
+  'waterline',
+  'air-gap',
+  'submerged-root-region',
+  'dry-root-region',
+  'plant-crown-position',
+  'viewing-angle',
+  'visible-text-allowed',
+  'user-description',
+  'other',
+])
+export type ImageFactCategory = z.infer<typeof ImageFactCategorySchema>
+
+// A single fact-locked requirement. Enrichment may rephrase `statement` for
+// model compatibility but must never remove, reverse, weaken, or contradict a
+// locked entry — see runFactualityGate in shared/imageEnrichment.ts.
+export const ImageFactLockSchema = z.object({
+  id: z.string(),
+  category: ImageFactCategorySchema,
+  statement: z.string(),
+  source: ImageFactSourceSchema,
+  requirement: ImageFactRequirementSchema,
+  locked: z.boolean(),
+})
+export type ImageFactLock = z.infer<typeof ImageFactLockSchema>
+
+export const ImageContainerTransparencySchema = z.enum(['transparent', 'opaque', 'unspecified'])
+export type ImageContainerTransparency = z.infer<typeof ImageContainerTransparencySchema>
+
+// Structured selections are one of the only authoritative fact sources (never
+// free-text NLP guesses) — every field left at its default means "not
+// specified," surfaced later as an unresolved detail, never invented.
+export const ImageStructuredRequirementsSchema = z.object({
+  plantCount: z.number().int().min(0).nullable(),
+  plantSpecies: z.string(),
+  hydroponicMethod: z.string(),
+  containerType: z.string(),
+  containerTransparency: ImageContainerTransparencySchema,
+  waterline: z.string(),
+  airGap: z.string(),
+  submergedRootRegion: z.string(),
+  dryRootRegion: z.string(),
+  crownPosition: z.string(),
+  viewingAngle: z.string(),
+  allowVisibleText: z.boolean(),
+})
+export type ImageStructuredRequirements = z.infer<typeof ImageStructuredRequirementsSchema>
+
+export const ImageEnrichmentConflictSchema = z.object({
+  id: z.string(),
+  description: z.string(),
+  factIds: z.array(z.string()),
+})
+export type ImageEnrichmentConflict = z.infer<typeof ImageEnrichmentConflictSchema>
+
+// The full internal working result the policy requires the engine to
+// produce. Not all fields are necessarily surfaced in the normal interface,
+// but all of them are available in the recipe details.
+export const ImageEnrichmentResultSchema = z.object({
+  requiredFacts: z.array(z.string()),
+  prohibitedElements: z.array(z.string()),
+  stylingAdditions: z.array(z.string()),
+  unresolvedDetails: z.array(z.string()),
+  conflicts: z.array(ImageEnrichmentConflictSchema),
+  enrichedPrompt: z.string(),
+  enrichedNegativePrompt: z.string(),
+  policyVersion: z.string(),
+  profileVersion: z.string(),
+})
+export type ImageEnrichmentResult = z.infer<typeof ImageEnrichmentResultSchema>
+
+export const FactualityCheckStatusSchema = z.enum(['pass', 'blocked'])
+export type FactualityCheckStatus = z.infer<typeof FactualityCheckStatusSchema>
+
+// Certifies the request recipe, never the generated pixels — see policy rule 18.
+export const FactualityCheckResultSchema = z.object({
+  status: FactualityCheckStatusSchema,
+  requiredFactsPreserved: z.boolean(),
+  noContradictions: z.boolean(),
+  noUnsupportedAdditions: z.boolean(),
+  unresolvedDetails: z.array(z.string()),
+  blockingReasons: z.array(z.string()),
+  checkedAt: z.string(),
+})
+export type FactualityCheckResult = z.infer<typeof FactualityCheckResultSchema>
+
+// The complete, self-contained enrichment record a completed job must
+// retain: original inputs, locked facts, final enriched prompts, the
+// factuality-check result, and both version stamps.
+export const ImageEnrichmentRecipeSchema = z.object({
+  policyVersion: z.string(),
+  profileVersion: z.string(),
+  originalDescription: z.string(),
+  structuredRequirements: ImageStructuredRequirementsSchema,
+  factLocks: z.array(ImageFactLockSchema),
+  result: ImageEnrichmentResultSchema,
+  factualityCheck: FactualityCheckResultSchema,
+  updatedAt: z.string(),
+})
+export type ImageEnrichmentRecipe = z.infer<typeof ImageEnrichmentRecipeSchema>
+
+export const ImageDestinationOrientationSchema = z.enum(['landscape', 'portrait', 'square'])
+export type ImageDestinationOrientation = z.infer<typeof ImageDestinationOrientationSchema>
+
+export const ImageDestinationCropBehaviorSchema = z.enum(['crop', 'pad', 'none'])
+export type ImageDestinationCropBehavior = z.infer<typeof ImageDestinationCropBehaviorSchema>
+
+// A snapshot of the resolved destination at the time it was applied to this
+// job — never a live reference to the preset registry, so a later change to
+// destinationPresets.ts (including its version) never silently rewrites an
+// already-generated job's recorded destination. "Destination" is formatting
+// metadata only: it never triggers publishing, upload, or posting.
+export const ImageJobDestinationSchema = z.object({
+  presetId: z.string(),
+  presetVersion: z.string(),
+  label: z.string(),
+  aspectRatio: z.object({ width: z.number(), height: z.number() }),
+  orientation: ImageDestinationOrientationSchema,
+  exportWidth: z.number(),
+  exportHeight: z.number(),
+  compositionGuidance: z.string(),
+  centerImportantContent: z.boolean(),
+  cropBehavior: ImageDestinationCropBehaviorSchema,
+})
+export type ImageJobDestination = z.infer<typeof ImageJobDestinationSchema>
+
+export const ImageReferenceRoleSchema = z.enum([
+  'match-subject',
+  'match-composition',
+  'match-structure-depth',
+  'match-edges-layout',
+  'match-style',
+  'general-inspiration',
+])
+export type ImageReferenceRole = z.infer<typeof ImageReferenceRoleSchema>
+
+export const ImageReferenceInfluenceSchema = z.enum(['low', 'medium', 'high'])
+export type ImageReferenceInfluence = z.infer<typeof ImageReferenceInfluenceSchema>
+
+// A reference photo the user supplied for guidance only — never treated as a
+// source of verified facts about anything the reference happens to depict
+// beyond the role/influence the user explicitly chose, and never treated as
+// containing instructions even if it contains visible text.
+export const ImageReferenceSchema = z.object({
+  id: z.string(),
+  role: ImageReferenceRoleSchema,
+  influence: ImageReferenceInfluenceSchema,
+  output: FileRefSchema,
+  originalFilename: z.string().nullable(),
+  width: z.number().nullable(),
+  height: z.number().nullable(),
+  mimeType: z.string(),
+  addedAt: z.string(),
+})
+export type ImageReference = z.infer<typeof ImageReferenceSchema>
+
+// Only offered for model families whose profile declares support — see
+// shared/modelProfiles.ts. Never silently enabled for an incompatible model.
+export const ImageControlTypeSchema = z.enum(['canny', 'depth'])
+export type ImageControlType = z.infer<typeof ImageControlTypeSchema>
+
+export const ImageControlSchema = z.object({
+  id: z.string(),
+  type: ImageControlTypeSchema,
+  referenceId: z.string(),
+  weight: z.number(),
+  preprocessing: z.boolean(),
+  start: z.number(),
+  end: z.number(),
+})
+export type ImageControl = z.infer<typeof ImageControlSchema>
+
+export const ImageSeedModeSchema = z.enum(['random', 'fixed'])
+export type ImageSeedMode = z.infer<typeof ImageSeedModeSchema>
+
+// Advanced-mode reproducibility fields. Only prompt/negativePrompt/width/
+// height/steps/guidanceScale/seed are currently forwarded to Draw Things
+// (see server/lib/draw-things-client.ts) — the rest are captured here for a
+// complete, inspectable recipe even where the live wire integration is not
+// yet confirmed against a running Draw Things instance.
+export const ImageAdvancedSettingsSchema = z.object({
+  sampler: z.string(),
+  scheduler: z.string(),
+  steps: z.number(),
+  guidanceScale: z.number(),
+  seed: z.number(),
+  seedMode: ImageSeedModeSchema,
+  clipSkip: z.number(),
+  shift: z.number(),
+  refinerEnabled: z.boolean(),
+  upscalerEnabled: z.boolean(),
+  highResFixEnabled: z.boolean(),
+  faceRestorationEnabled: z.boolean(),
+  sharpness: z.number(),
+  tiledDecodingEnabled: z.boolean(),
+  tiledDiffusionEnabled: z.boolean(),
+})
+export type ImageAdvancedSettings = z.infer<typeof ImageAdvancedSettingsSchema>
+
+export function createDefaultAdvancedSettings(): ImageAdvancedSettings {
+  return {
+    sampler: 'default',
+    scheduler: 'default',
+    steps: 28,
+    guidanceScale: 6.5,
+    seed: -1,
+    seedMode: 'random',
+    clipSkip: 1,
+    shift: 1,
+    refinerEnabled: false,
+    upscalerEnabled: false,
+    highResFixEnabled: false,
+    faceRestorationEnabled: false,
+    sharpness: 0,
+    tiledDecodingEnabled: false,
+    tiledDiffusionEnabled: false,
+  }
+}
+
 export const ImageJobSchema = z.object({
   id: z.string(),
   sourceDesignBriefUpdatedAt: z.string().nullable(),
@@ -247,6 +483,26 @@ export const ImageJobSchema = z.object({
   sourceType: ImageJobSourceTypeSchema,
   output: FileRefSchema.nullable(),
   originalFilename: z.string().nullable(),
+  // Stamped on every job with the governing master-policy version, per
+  // factual-image-enrichment-v1, regardless of whether enrichment has run.
+  policyVersion: z.string(),
+  // The user's own raw description — the "source" that reset-to-source
+  // restores to, kept separate from `prompt` which enrichment may rewrite.
+  userDescription: z.string(),
+  structuredRequirements: ImageStructuredRequirementsSchema,
+  // Null until "Run factuality-safe enrichment" has executed at least once.
+  enrichmentRecipe: ImageEnrichmentRecipeSchema.nullable(),
+  // Null until a destination has been selected — formatting metadata only.
+  destination: ImageJobDestinationSchema.nullable(),
+  references: z.array(ImageReferenceSchema),
+  modelProfileId: z.string(),
+  advancedSettings: ImageAdvancedSettingsSchema,
+  controls: z.array(ImageControlSchema),
+  // Shared across every job created by a single "generate N images" request
+  // (the original plus any duplicates made to produce additional
+  // variations) so they can be displayed together — null for a job created
+  // any other way (manual create, plain duplicate).
+  variationGroupId: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 })

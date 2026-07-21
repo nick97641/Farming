@@ -1,3 +1,5 @@
+import { DESTINATION_PRESETS_VERSION, getDestinationPreset, resolveNativeDimensions } from '../../shared/destinationPresets'
+import { getModelProfile } from '../../shared/modelProfiles'
 import type { ImageJob, ImageJobPurpose, ImageJobStatus } from '../../shared/schema/project'
 
 export const PURPOSE_OPTIONS: { value: ImageJobPurpose; label: string }[] = [
@@ -97,11 +99,53 @@ export function applyImageRequirements(
   }
 }
 
+// Applies a destination preset: stores a snapshot (never a live reference to
+// the registry, so a later preset change never rewrites an already-generated
+// job) and resolves model-compatible native generation dimensions separately
+// from the preset's fixed export dimensions — never sends an arbitrary,
+// unsupported size to Draw Things.
+export function applyDestination(
+  job: ImageJob,
+  presetId: string,
+  customExport?: { width: number; height: number },
+): ImageJob {
+  const preset = getDestinationPreset(presetId)
+  const modelProfile = getModelProfile(job.modelProfileId)
+  const exportWidth = presetId === 'custom' && customExport ? customExport.width : preset.exportWidth
+  const exportHeight = presetId === 'custom' && customExport ? customExport.height : preset.exportHeight
+  const aspectRatio = presetId === 'custom' && customExport ? { width: exportWidth, height: exportHeight } : preset.aspectRatio
+  const native = resolveNativeDimensions(aspectRatio, modelProfile)
+  return {
+    ...job,
+    width: native.width,
+    height: native.height,
+    destination: {
+      presetId: preset.id,
+      presetVersion: DESTINATION_PRESETS_VERSION,
+      label: preset.label,
+      aspectRatio,
+      orientation: preset.orientation,
+      exportWidth,
+      exportHeight,
+      compositionGuidance: preset.compositionGuidance,
+      centerImportantContent: preset.centerImportantContent,
+      cropBehavior: preset.cropBehavior,
+    },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
 // Pulled out as a pure function (rather than inlined in ImageGenerationTab)
 // so the "duplicate" rule — new id/timestamps, no output, everything else
 // carried over including the Design Brief reference — is independently
-// testable without a React test setup this repo doesn't have.
-export function duplicateImageJob(job: ImageJob, overrides?: { id?: string; now?: string }): ImageJob {
+// testable without a React test setup this repo doesn't have. A plain
+// duplicate is never part of the original's variation group (null) unless
+// the caller explicitly supplies one, which is how a "generate N images"
+// request links its sibling jobs together for display.
+export function duplicateImageJob(
+  job: ImageJob,
+  overrides?: { id?: string; now?: string; variationGroupId?: string | null },
+): ImageJob {
   const now = overrides?.now ?? new Date().toISOString()
   return {
     ...job,
@@ -109,6 +153,7 @@ export function duplicateImageJob(job: ImageJob, overrides?: { id?: string; now?
     status: 'draft',
     output: null,
     originalFilename: null,
+    variationGroupId: overrides?.variationGroupId ?? null,
     createdAt: now,
     updatedAt: now,
   }

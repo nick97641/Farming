@@ -87,3 +87,33 @@ export function deleteImageJob(projectId: string, jobId: string): Promise<Projec
 export function generateImageJob(projectId: string, jobId: string): Promise<Project> {
   return request(`/projects/${projectId}/image-jobs/${jobId}/generate`, { method: 'POST' })
 }
+
+export function getReferenceFileUrl(projectId: string, jobId: string, referenceId: string): string {
+  return `${API_BASE}/projects/${projectId}/image-jobs/${jobId}/references/${referenceId}/file`
+}
+
+export async function importReferencePhoto(
+  projectId: string,
+  jobId: string,
+  file: File,
+  role: string,
+  influence: string,
+): Promise<Project> {
+  const url =
+    `${API_BASE}/projects/${projectId}/image-jobs/${jobId}/references/import` +
+    `?role=${encodeURIComponent(role)}&influence=${encodeURIComponent(influence)}&filename=${encodeURIComponent(file.name)}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error((body as { error?: string } | null)?.error ?? `Reference import failed with status ${response.status}`)
+  }
+  return (await response.json()) as Project
+}
+
+export function deleteReferencePhoto(projectId: string, jobId: string, referenceId: string): Promise<Project> {
+  return request(`/projects/${projectId}/image-jobs/${jobId}/references/${referenceId}`, { method: 'DELETE' })
+}

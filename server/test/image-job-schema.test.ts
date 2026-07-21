@@ -1,7 +1,9 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { createEmptyProject, ImageJobSchema, ProjectSchema } from '../../shared/schema/project.ts'
+import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../shared/imageEnrichment.ts'
+import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
+import { createDefaultAdvancedSettings, createEmptyProject, ImageJobSchema, ProjectSchema } from '../../shared/schema/project.ts'
 
 function validImageJob() {
   return {
@@ -17,6 +19,16 @@ function validImageJob() {
     sourceType: 'imported' as const,
     output: null,
     originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: 'A bright DWC lettuce bucket system on a sunny windowsill',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    advancedSettings: createDefaultAdvancedSettings(),
+    controls: [],
+    variationGroupId: null,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
   }
