@@ -1,5 +1,5 @@
 import { ENRICHMENT_POLICY_VERSION, ENRICHMENT_PROFILE_VERSION } from '../../shared/imageEnrichment.ts'
-import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
+import { DEFAULT_MODEL_PROFILE_ID, DrawThingsSamplerSchema, DrawThingsSchedulerSchema } from '../../shared/modelProfiles.ts'
 import {
   ConfidenceSchema,
   createDefaultAdvancedSettings,
@@ -46,6 +46,8 @@ const VALID_CONTROL_TYPES = new Set<string>(ImageControlTypeSchema.options)
 const VALID_DESTINATION_ORIENTATIONS = new Set<string>(ImageDestinationOrientationSchema.options)
 const VALID_DESTINATION_CROP_BEHAVIORS = new Set<string>(ImageDestinationCropBehaviorSchema.options)
 const VALID_SEED_MODES = new Set<string>(ImageSeedModeSchema.options)
+const VALID_SAMPLERS = new Set<string>(DrawThingsSamplerSchema.options)
+const VALID_SCHEDULERS = new Set<string>(DrawThingsSchedulerSchema.options)
 
 // Upgrades an older flat string[] list (from before the confidence field
 // existed) into the current { text, confidence }[] shape. Anything already in
@@ -313,8 +315,13 @@ function normalizeAdvancedSettings(raw: unknown): unknown {
   const source = isRecord(raw) ? raw : {}
   const defaults = createDefaultAdvancedSettings()
   return {
-    sampler: typeof source.sampler === 'string' ? source.sampler : defaults.sampler,
-    scheduler: typeof source.scheduler === 'string' ? source.scheduler : defaults.scheduler,
+    // A legacy or hand-edited value outside the Draw-Things-confirmed set
+    // (e.g. a pre-validation free-text value like "euler_a") is not
+    // "repaired" by guessing what was meant — it falls back to 'default',
+    // same reasoning as every other enum field in this file.
+    sampler: typeof source.sampler === 'string' && VALID_SAMPLERS.has(source.sampler) ? source.sampler : defaults.sampler,
+    scheduler:
+      typeof source.scheduler === 'string' && VALID_SCHEDULERS.has(source.scheduler) ? source.scheduler : defaults.scheduler,
     steps: typeof source.steps === 'number' ? source.steps : defaults.steps,
     guidanceScale: typeof source.guidanceScale === 'number' ? source.guidanceScale : defaults.guidanceScale,
     seed: typeof source.seed === 'number' ? source.seed : defaults.seed,
@@ -371,6 +378,7 @@ function normalizeImageJob(raw: unknown): unknown {
     controls: Array.isArray(raw.controls)
       ? raw.controls.map(normalizeImageControl).filter((c): c is NonNullable<typeof c> => c !== null)
       : [],
+    effectiveModel: typeof raw.effectiveModel === 'string' ? raw.effectiveModel : null,
     variationGroupId: typeof raw.variationGroupId === 'string' ? raw.variationGroupId : null,
     createdAt,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : createdAt,

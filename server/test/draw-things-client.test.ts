@@ -6,6 +6,7 @@ import {
   buildDrawThingsPayload,
   decodeDrawThingsImage,
   generateWithDrawThings,
+  getActiveDrawThingsModel,
 } from '../lib/draw-things-client.ts'
 
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4])
@@ -42,21 +43,20 @@ test('buildDrawThingsPayload forwards steps, guidance scale, and an explicit see
   assert.equal(payload.seed, 12345)
 })
 
-test('buildDrawThingsPayload includes sampler_name/scheduler only when explicitly supplied', () => {
-  const withoutThem = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024 })
-  assert.equal('sampler_name' in withoutThem, false)
-  assert.equal('scheduler' in withoutThem, false)
+test('buildDrawThingsPayload includes sampler_name only when explicitly supplied and not "default"', () => {
+  const withoutIt = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024 })
+  assert.equal('sampler_name' in withoutIt, false)
 
-  const withThem = buildDrawThingsPayload({
-    prompt: 'a',
-    negativePrompt: '',
-    width: 1024,
-    height: 1024,
-    sampler: 'euler_a',
-    scheduler: 'karras',
-  })
-  assert.equal(withThem.sampler_name, 'euler_a')
-  assert.equal(withThem.scheduler, 'karras')
+  const withDefault = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024, sampler: 'default' })
+  assert.equal('sampler_name' in withDefault, false)
+
+  const withReal = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024, sampler: 'Euler a' })
+  assert.equal(withReal.sampler_name, 'Euler a')
+})
+
+test('buildDrawThingsPayload never includes a scheduler key — Draw Things rejects that field outright regardless of value', () => {
+  const payload = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024, sampler: 'DPM++ 2M Karras' })
+  assert.equal('scheduler' in payload, false)
 })
 
 test('buildDrawThingsPayload omits alwayson_scripts.controlnet entirely when there are no controls', () => {
@@ -105,4 +105,27 @@ test('generateWithDrawThings reports malformed API responses cleanly', async () 
     () => generateWithDrawThings({ prompt: 'lettuce', negativePrompt: '', width: 1024, height: 1024 }, fakeFetch),
     DrawThingsGenerationError,
   )
+})
+
+test('getActiveDrawThingsModel reports the model field from a successful /sdapi/v1/options response', async () => {
+  const fakeFetch: typeof fetch = async () =>
+    new Response(JSON.stringify({ model: 'realvisxl_v4.0_q6p_q8p.ckpt', steps: 8 }), { status: 200 })
+  assert.equal(await getActiveDrawThingsModel(fakeFetch), 'realvisxl_v4.0_q6p_q8p.ckpt')
+})
+
+test('getActiveDrawThingsModel returns null (never guesses) when the endpoint is unreachable', async () => {
+  const fakeFetch: typeof fetch = async () => {
+    throw new Error('ECONNREFUSED')
+  }
+  assert.equal(await getActiveDrawThingsModel(fakeFetch), null)
+})
+
+test('getActiveDrawThingsModel returns null when the response has no model field', async () => {
+  const fakeFetch: typeof fetch = async () => new Response(JSON.stringify({ steps: 8 }), { status: 200 })
+  assert.equal(await getActiveDrawThingsModel(fakeFetch), null)
+})
+
+test('getActiveDrawThingsModel returns null on a non-2xx response rather than guessing', async () => {
+  const fakeFetch: typeof fetch = async () => new Response('not found', { status: 404 })
+  assert.equal(await getActiveDrawThingsModel(fakeFetch), null)
 })

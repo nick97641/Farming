@@ -180,6 +180,48 @@ test('8b. no conflict is reported when the negative prompt does not contradict a
   assert.deepEqual(conflicts, [])
 })
 
+test('8c. a required fact mentioning "legs" does not conflict with a negative prompt excluding "extra legs" (no shared-token false positive)', () => {
+  const factLocks = [
+    {
+      id: 'user-description',
+      category: 'user-description' as const,
+      statement: 'a lawn ornament standing on two black support legs',
+      source: 'user' as const,
+      requirement: 'required' as const,
+      locked: true,
+    },
+  ]
+  const conflicts = detectConflicts({ factLocks, freeformNegativePrompt: 'extra legs, duplicated bird' })
+  assert.deepEqual(conflicts, [])
+})
+
+test('8d. a required "1 plant" count does not conflict with an ordinary "duplicated plants" negative-prompt phrase', () => {
+  const { factLocks } = extractFactLocks(hydroponicRequirements({ plantCount: 1 }))
+  const conflicts = detectConflicts({ factLocks, freeformNegativePrompt: 'duplicated plants, blurry' })
+  assert.deepEqual(conflicts, [])
+})
+
+test('8e. a required transparent container conflicts with a negative prompt describing an opaque container', () => {
+  const { factLocks } = extractFactLocks(hydroponicRequirements({ containerTransparency: 'transparent' }))
+  const conflicts = detectConflicts({ factLocks, freeformNegativePrompt: 'opaque container' })
+  assert.ok(conflicts.length > 0)
+  assert.ok(conflicts.some((c) => c.description.includes('opaque')))
+})
+
+test('8f. a required visible-text fact conflicts with a negative prompt saying no text', () => {
+  const { factLocks } = extractFactLocks(hydroponicRequirements({ allowVisibleText: true }))
+  const conflicts = detectConflicts({ factLocks, freeformNegativePrompt: 'no text' })
+  assert.ok(conflicts.length > 0)
+  assert.ok(conflicts.some((c) => c.description.includes('text')))
+})
+
+test('8g. a required submerged root region conflicts with a negative prompt insisting roots must remain dry', () => {
+  const { factLocks } = extractFactLocks(hydroponicRequirements({ submergedRootRegion: 'lower roots submerged in the nutrient solution' }))
+  const conflicts = detectConflicts({ factLocks, freeformNegativePrompt: 'roots must remain dry' })
+  assert.ok(conflicts.length > 0)
+  assert.ok(conflicts.some((c) => c.description.includes('dry')))
+})
+
 test('9. blocks generation when a locked required fact disappears from the effective prompt', () => {
   const { factLocks } = extractFactLocks(hydroponicRequirements({ plantCount: 1 }))
   const gate = runFactualityGate({
@@ -290,6 +332,7 @@ test('13. retains the complete factuality record after job completion and duplic
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,

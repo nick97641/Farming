@@ -126,14 +126,35 @@ const BANNED_QUALITY_TOKENS: readonly string[] = [
   'trending on artstation',
 ]
 
-// Rule 4: opposing physical states the gate treats as mutually exclusive
-// when checking whether a negative prompt contradicts a required fact.
-const OPPOSITE_TERMS: ReadonlyArray<[string, string]> = [
-  ['transparent', 'opaque'],
-  ['submerged', 'dry'],
-  ['visible', 'hidden'],
-  ['above', 'below'],
-]
+// Rule 4/15: terms that would contradict a required fact in a specific
+// STRUCTURED category if they appear in the free-text negative prompt.
+// Deliberately curated and scoped to only these known, unambiguous
+// categories — never applied to 'user-description' or 'plant-count', whose
+// statements are free-form or numeric prose where an incidental shared word
+// does not imply an actual contradiction. A prior version of this check
+// scanned every required fact's full statement (including entire free-text
+// user descriptions) for a small set of words appearing anywhere in the
+// negative prompt, which produced false positives whenever the same word
+// showed up in unrelated senses -- e.g. "two support legs" (a physical
+// description) flagged as conflicting with a negative prompt containing
+// "extra legs" (ordinary anti-duplication boilerplate), or "full body
+// completely visible" flagged as conflicting with this engine's own
+// auto-appended "No visible text..." prohibition, since both merely
+// contained the word "visible" in entirely different senses.
+const CONTRADICTING_TERMS_BY_CATEGORY: Partial<Record<ImageFactCategory, readonly string[]>> = {
+  'container-transparency': ['transparent', 'opaque'],
+  'submerged-root-region': ['dry'],
+  'dry-root-region': ['submerged'],
+  'visible-text-allowed': ['text'],
+}
+
+// Whole-word match (not a bare substring) so e.g. "opaque" doesn't
+// accidentally match inside an unrelated longer word, and "text" doesn't
+// match inside "texture"/"textured".
+function containsWord(haystack: string, word: string): boolean {
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return new RegExp(`\\b${escaped}\\b`, 'i').test(haystack)
+}
 
 export function createDefaultStructuredRequirements(): ImageStructuredRequirements {
   return {
@@ -316,19 +337,13 @@ export function detectConflicts(input: {
   const negativeLower = input.freeformNegativePrompt.toLowerCase()
   if (negativeLower.trim()) {
     for (const f of input.factLocks.filter((f) => f.requirement === 'required')) {
-      const statementLower = f.statement.toLowerCase()
-      for (const [a, b] of OPPOSITE_TERMS) {
-        if (statementLower.includes(a) && negativeLower.includes(a)) {
+      const terms = CONTRADICTING_TERMS_BY_CATEGORY[f.category]
+      if (!terms) continue
+      for (const term of terms) {
+        if (containsWord(negativeLower, term)) {
           conflicts.push({
-            id: `conflict-negative-${f.id}-${a}`,
-            description: `The negative prompt excludes "${a}", which contradicts the required fact "${f.statement}".`,
-            factIds: [f.id],
-          })
-        }
-        if (statementLower.includes(b) && negativeLower.includes(b)) {
-          conflicts.push({
-            id: `conflict-negative-${f.id}-${b}`,
-            description: `The negative prompt excludes "${b}", which contradicts the required fact "${f.statement}".`,
+            id: `conflict-negative-${f.id}-${term}`,
+            description: `The negative prompt excludes "${term}", which contradicts the required fact "${f.statement}".`,
             factIds: [f.id],
           })
         }

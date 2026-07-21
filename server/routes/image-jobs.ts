@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import express, { Router } from 'express'
 
 import type { DrawThingsControlInput } from '../lib/draw-things-client.ts'
-import { DrawThingsGenerationError, generateWithDrawThings } from '../lib/draw-things-client.ts'
+import { DrawThingsGenerationError, generateWithDrawThings, getActiveDrawThingsModel } from '../lib/draw-things-client.ts'
 import {
   deleteImageFile,
   getOwnedImageFileKey,
@@ -16,7 +16,7 @@ import {
 } from '../lib/image-storage.ts'
 import { ProjectDataCorruptError, ProjectNotFoundError, readProject, writeProject } from '../lib/storage.ts'
 import { detectConflicts, runFactualityGate } from '../../shared/imageEnrichment.ts'
-import { getModelProfile, supportsControl } from '../../shared/modelProfiles.ts'
+import { getModelProfile, supportsControl, supportsSampler, supportsScheduler } from '../../shared/modelProfiles.ts'
 import {
   ImageReferenceInfluenceSchema,
   ImageReferenceRoleSchema,
@@ -162,6 +162,27 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
     return
   }
 
+  // Sampler/scheduler are schema-validated enums (see DRAW_THINGS_SAMPLERS/
+  // DRAW_THINGS_SCHEDULERS in shared/modelProfiles.ts, both confirmed
+  // directly against the installed Draw Things HTTP API), so an invalid
+  // value should already be structurally impossible on a job that passed
+  // ProjectSchema validation. This is defense-in-depth for stale/legacy
+  // records — reject locally with a clear 400 before ever calling Draw
+  // Things, never let an invalid local setting surface as an opaque
+  // provider 502.
+  if (!supportsSampler(modelProfile, job.advancedSettings.sampler)) {
+    res.status(400).json({
+      error: `Unsupported sampler "${job.advancedSettings.sampler}". Supported values: ${modelProfile.supportedSamplers.join(', ')}`,
+    })
+    return
+  }
+  if (!supportsScheduler(modelProfile, job.advancedSettings.scheduler)) {
+    res.status(400).json({
+      error: `Unsupported scheduler "${job.advancedSettings.scheduler}". Supported values: ${modelProfile.supportedSchedulers.join(', ')}`,
+    })
+    return
+  }
+
   // Pre-generation factuality gate (factual-image-enrichment-v1), enforced
   // here independently of the client UI so a direct API call can't bypass
   // it. Re-checked against the job's *current* prompt/negative prompt —
@@ -227,6 +248,17 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
       return
     }
 
+    // Best-effort, read-only check of what Draw Things is actually using,
+    // queried immediately before the generation call it describes (there is
+    // no atomic way to guarantee it doesn't change in the instant between
+    // this read and the txt2img call below — Draw Things exposes no such
+    // guarantee — so this is "what Draw Things reported a moment before
+    // generating," not a verified guarantee of what was used). Never
+    // guessed: null when the endpoint can't be reached or doesn't report a
+    // model, so an unknown effective model stays visibly unknown rather
+    // than silently assumed to match modelProfileId.
+    const effectiveModel = await getActiveDrawThingsModel()
+
     let imageBuffer: Buffer
     try {
       imageBuffer = await generateWithDrawThings({
@@ -237,8 +269,7 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
         steps: job.advancedSettings.steps,
         guidanceScale: job.advancedSettings.guidanceScale,
         seed: resolvedSeed,
-        sampler: job.advancedSettings.sampler !== 'default' ? job.advancedSettings.sampler : undefined,
-        scheduler: job.advancedSettings.scheduler !== 'default' ? job.advancedSettings.scheduler : undefined,
+        sampler: job.advancedSettings.sampler,
         controls,
       })
     } catch (error) {
@@ -269,6 +300,9 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
       // Records the exact seed actually used for this variation, whether it
       // came from a fixed setting or was freshly picked for "random".
       advancedSettings: { ...job.advancedSettings, seed: resolvedSeed },
+      // What Draw Things reported using, queried above — kept separate from
+      // modelProfileId (what the user requested) and never assumed to match it.
+      effectiveModel,
       updatedAt: new Date().toISOString(),
     }
     let updated: Project
@@ -315,9 +349,14 @@ imageJobsRouter.get('/projects/:id/image-jobs/:jobId/file', async (req, res) => 
   res.sendFile(absolutePath)
 })
 
-// Deletes the job's owned image file (if any) before removing the job from
-// the project, so a delete never leaves an orphaned file behind. A file
-// that's already missing is not an error — the job is removed either way.
+// Deletes the job's owned image file (if any) AND every reference-photo
+// file it exclusively owns before removing the job from the project, so a
+// delete never leaves an orphaned file behind. A file that's already
+// missing, unresolvable, or not provably owned (see getOwnedImageFileKey —
+// rejects absolute, traversing, malformed, or external paths) is silently
+// left alone rather than unlinked, and a reference file still owned by
+// another job (e.g. a duplicate created via duplicateImageJob) is never
+// touched.
 imageJobsRouter.delete('/projects/:id/image-jobs/:jobId', async (req, res) => {
   const project = await loadProjectOr404(req.params.id, res)
   if (!project) return
@@ -336,6 +375,13 @@ imageJobsRouter.delete('/projects/:id/image-jobs/:jobId', async (req, res) => {
         (other) => other.id !== job.id && other.output && getOwnedImageFileKey(project.id, other.output) === ownedKey,
       )
     if (!isShared) await deleteImageFile(project.id, job.output)
+  }
+
+  for (const reference of job.references) {
+    const ownedKey = getOwnedImageFileKey(project.id, reference.output)
+    if (ownedKey && !isReferenceFileOwnedElsewhere(project, ownedKey, { jobId: job.id })) {
+      await deleteImageFile(project.id, reference.output)
+    }
   }
 
   const updated = await writeProject(
@@ -450,11 +496,16 @@ imageJobsRouter.get('/projects/:id/image-jobs/:jobId/references/:referenceId/fil
 // resolved owned-file key, never by reference id — a duplicated job carries
 // over its source's reference entries verbatim (same id, same output), so an
 // id-based comparison would fail to see the source's copy as still sharing
-// the file.
-function isReferenceFileShared(project: Project, targetJobId: string, targetReferenceId: string, ownedKey: string): boolean {
+// the file. `exclude.referenceId` omitted means "exclude every reference
+// belonging to exclude.jobId" (used when deleting a whole job); provided
+// means "exclude only that one reference" (used when deleting a single
+// reference, so a second reference within the SAME job pointing at the same
+// file is still correctly treated as still sharing it).
+function isReferenceFileOwnedElsewhere(project: Project, ownedKey: string, exclude: { jobId: string; referenceId?: string }): boolean {
   return project.imageJobs.some((otherJob) =>
     otherJob.references.some((candidate) => {
-      if (otherJob.id === targetJobId && candidate.id === targetReferenceId) return false
+      const isExcluded = otherJob.id === exclude.jobId && (exclude.referenceId === undefined || candidate.id === exclude.referenceId)
+      if (isExcluded) return false
       return getOwnedImageFileKey(project.id, candidate.output) === ownedKey
     }),
   )
@@ -489,7 +540,7 @@ imageJobsRouter.delete('/projects/:id/image-jobs/:jobId/references/:referenceId'
   }
 
   const ownedKey = getOwnedImageFileKey(project.id, reference.output)
-  if (ownedKey && !isReferenceFileShared(project, job.id, reference.id, ownedKey)) {
+  if (ownedKey && !isReferenceFileOwnedElsewhere(project, ownedKey, { jobId: job.id, referenceId: reference.id })) {
     await deleteImageFile(project.id, reference.output)
   }
 

@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+import { DrawThingsSamplerSchema, DrawThingsSchedulerSchema } from '../modelProfiles.ts'
+
 export const AssetTypeSchema = z.enum(['image', 'video', 'audio', 'document', 'reference'])
 export type AssetType = z.infer<typeof AssetTypeSchema>
 
@@ -426,14 +428,20 @@ export type ImageControl = z.infer<typeof ImageControlSchema>
 export const ImageSeedModeSchema = z.enum(['random', 'fixed'])
 export type ImageSeedMode = z.infer<typeof ImageSeedModeSchema>
 
-// Advanced-mode reproducibility fields. Only prompt/negativePrompt/width/
-// height/steps/guidanceScale/seed are currently forwarded to Draw Things
-// (see server/lib/draw-things-client.ts) — the rest are captured here for a
+// Advanced-mode reproducibility fields. prompt/negativePrompt/width/height/
+// steps/guidanceScale/seed/sampler are forwarded to Draw Things (see
+// server/lib/draw-things-client.ts); sampler is constrained to
+// DRAW_THINGS_SAMPLERS, the exact set confirmed valid by the installed Draw
+// Things HTTP API itself. scheduler is constrained to DRAW_THINGS_SCHEDULERS
+// — confirmed to be just `['default']`, since Draw Things' txt2img endpoint
+// rejects the "scheduler" key outright (scheduling is selected via the
+// sampler value itself, e.g. the "Karras"/"Trailing"/"AYS" suffixed sampler
+// names) — so it is never actually sent. The rest are captured here for a
 // complete, inspectable recipe even where the live wire integration is not
 // yet confirmed against a running Draw Things instance.
 export const ImageAdvancedSettingsSchema = z.object({
-  sampler: z.string(),
-  scheduler: z.string(),
+  sampler: DrawThingsSamplerSchema,
+  scheduler: DrawThingsSchedulerSchema,
   steps: z.number(),
   guidanceScale: z.number(),
   seed: z.number(),
@@ -495,9 +503,22 @@ export const ImageJobSchema = z.object({
   // Null until a destination has been selected — formatting metadata only.
   destination: ImageJobDestinationSchema.nullable(),
   references: z.array(ImageReferenceSchema),
+  // The profile the user selected. This is a REQUEST, never a guarantee —
+  // the installed Draw Things HTTP API has no way for this app to select or
+  // force which underlying model is active (its only per-request "model"
+  // field is validated against Draw Things' own loaded-model registry, not
+  // an arbitrary switch, and there is no confirmed listing endpoint to map
+  // our profiles to real checkpoint names without guessing). See
+  // effectiveModel below for what Draw Things actually reported using.
   modelProfileId: z.string(),
   advancedSettings: ImageAdvancedSettingsSchema,
   controls: z.array(ImageControlSchema),
+  // The model Draw Things itself reported as active (via GET
+  // /sdapi/v1/options) immediately before this job's generation request —
+  // queried, never guessed. Null until a generation has completed. Never
+  // assumed to match modelProfileId; the two are surfaced side by side so a
+  // mismatch is visible rather than silently papered over.
+  effectiveModel: z.string().nullable(),
   // Shared across every job created by a single "generate N images" request
   // (the original plus any duplicates made to produce additional
   // variations) so they can be displayed together — null for a job created

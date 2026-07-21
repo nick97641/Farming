@@ -60,6 +60,7 @@ function createBlankJob(designBrief: DesignBrief | null): ImageJob {
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,

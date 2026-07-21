@@ -28,6 +28,7 @@ function validImageJob() {
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
@@ -92,4 +93,26 @@ test('ProjectSchema accepts a project with a populated imageJobs array', () => {
   const project = createEmptyProject({ id: 'image-schema-test-2', title: 'Test', topic: 'test topic' })
   const withJobs = { ...project, imageJobs: [validImageJob()] }
   assert.ok(ProjectSchema.safeParse(withJobs).success)
+})
+
+test('ImageJobSchema accepts every Draw-Things-confirmed sampler value', () => {
+  const job = validImageJob()
+  for (const sampler of ['default', 'DPM++ 2M Karras', 'Euler a', 'TCD Trailing']) {
+    const result = ImageJobSchema.safeParse({ ...job, advancedSettings: { ...job.advancedSettings, sampler } })
+    assert.ok(result.success, `expected "${sampler}" to be accepted`)
+  }
+})
+
+test('ImageJobSchema rejects a sampler value that was never confirmed against Draw Things (centralized schema validation, not free text)', () => {
+  const job = validImageJob()
+  for (const sampler of ['euler_a', 'karras', 'Euler A', '']) {
+    const result = ImageJobSchema.safeParse({ ...job, advancedSettings: { ...job.advancedSettings, sampler } })
+    assert.equal(result.success, false, `expected "${sampler}" to be rejected`)
+  }
+})
+
+test('ImageJobSchema rejects any scheduler value other than "default" — Draw Things has no working separate scheduler parameter', () => {
+  const job = validImageJob()
+  const result = ImageJobSchema.safeParse({ ...job, advancedSettings: { ...job.advancedSettings, scheduler: 'karras' } })
+  assert.equal(result.success, false)
 })

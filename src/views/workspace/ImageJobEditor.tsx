@@ -11,7 +11,7 @@ import { getImageJobFileUrl } from '../../lib/api'
 import { applyDestination, STATUS_OPTIONS } from '../../lib/imageJobOptions'
 import { detectConflicts, enrichImageRequest, runFactualityGate } from '../../../shared/imageEnrichment'
 import { DESTINATION_PRESETS, validateCustomDimensions } from '../../../shared/destinationPresets'
-import { getModelProfile, MODEL_PROFILES } from '../../../shared/modelProfiles'
+import { DRAW_THINGS_SAMPLERS, DRAW_THINGS_SCHEDULERS, getModelProfile, MODEL_PROFILES } from '../../../shared/modelProfiles'
 import { influenceToWeight, roleToControlType } from '../../../shared/referenceGuidance'
 import { ReferencePhotoManager } from './ReferencePhotoManager'
 
@@ -71,6 +71,13 @@ export function ImageJobEditor({
   const [customWidth, setCustomWidth] = useState(1024)
   const [customHeight, setCustomHeight] = useState(1024)
   const [customDimensionError, setCustomDimensionError] = useState<string | null>(null)
+  // Draw Things' HTTP API can report which model it's currently using (read
+  // separately, once, immediately before each generate call — see
+  // effectiveModel below) but has no way for this app to SELECT it. There is
+  // therefore no reliable pre-generation check to run; this is a blocking
+  // human confirmation instead. Tracks the specific profile id it was given
+  // for, not a plain boolean, so switching models forces re-confirmation.
+  const [modelConfirmedFor, setModelConfirmedFor] = useState<string | null>(null)
 
   const stale = job.sourceDesignBriefUpdatedAt !== null && job.sourceDesignBriefUpdatedAt !== designBrief?.updatedAt
   const immutable = job.status === 'completed' || job.output !== null
@@ -174,7 +181,11 @@ export function ImageJobEditor({
   }
 
   const canGenerate =
-    !generating && !importing && job.prompt.trim().length > 0 && liveFactualityCheck?.status !== 'blocked'
+    !generating &&
+    !importing &&
+    job.prompt.trim().length > 0 &&
+    liveFactualityCheck?.status !== 'blocked' &&
+    modelConfirmedFor === job.modelProfileId
 
   return (
     <div className="idea-editor">
@@ -497,12 +508,27 @@ export function ImageJobEditor({
               Seed: {job.advancedSettings.seed} · {job.width}×{job.height}
               {job.destination ? ` · ${job.destination.label}` : ''}
             </p>
+            <p className="field-hint">
+              Requested model: {modelProfile.label}.{' '}
+              {job.effectiveModel
+                ? `Draw Things reported using: ${job.effectiveModel}.`
+                : "Draw Things did not report which model it used — this app has no way to confirm the two match."}
+            </p>
             <button type="button" onClick={() => onDuplicate(job)}>
               Duplicate as new variation
             </button>
           </>
         ) : (
           <>
+            <label className="field">
+              <input
+                type="checkbox"
+                checked={modelConfirmedFor === job.modelProfileId}
+                onChange={(event) => setModelConfirmedFor(event.target.checked ? job.modelProfileId : null)}
+              />
+              I've confirmed <strong>{modelProfile.label}</strong> is the model currently active in Draw Things — this
+              app cannot select or verify it for you.
+            </label>
             <button type="button" onClick={() => onGenerate(imageCount)} disabled={!canGenerate}>
               {generating ? generateProgressLabel ?? 'Generating...' : `Generate ${imageCount > 1 ? `${imageCount} images` : 'image'}`}
             </button>
@@ -582,12 +608,34 @@ export function ImageJobEditor({
           )}
           <label className="field">
             Sampler
-            <input value={job.advancedSettings.sampler} onChange={(event) => patchAdvanced({ sampler: event.target.value })} />
+            <select
+              value={job.advancedSettings.sampler}
+              onChange={(event) => patchAdvanced({ sampler: event.target.value as ImageJob['advancedSettings']['sampler'] })}
+            >
+              {DRAW_THINGS_SAMPLERS.map((sampler) => (
+                <option key={sampler} value={sampler}>
+                  {sampler === 'default' ? "Draw Things' default" : sampler}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="field">
             Scheduler
-            <input value={job.advancedSettings.scheduler} onChange={(event) => patchAdvanced({ scheduler: event.target.value })} />
+            <select
+              value={job.advancedSettings.scheduler}
+              onChange={(event) => patchAdvanced({ scheduler: event.target.value as ImageJob['advancedSettings']['scheduler'] })}
+            >
+              {DRAW_THINGS_SCHEDULERS.map((scheduler) => (
+                <option key={scheduler} value={scheduler}>
+                  {scheduler === 'default' ? "Draw Things' default" : scheduler}
+                </option>
+              ))}
+            </select>
           </label>
+          <p className="field-hint">
+            Draw Things has no separate scheduler parameter — scheduling is selected as part of the sampler itself
+            (the "Karras"/"Trailing"/"AYS" options above), so scheduler only ever has one working value here.
+          </p>
           <label className="field">
             Steps
             <input
@@ -700,9 +748,10 @@ export function ImageJobEditor({
             Tiled diffusion
           </label>
           <p className="field-hint">
-            Sampler/scheduler/steps/guidance/seed are sent to Draw Things. CLIP skip, shift, refiner, upscaler, high-res
-            fix, face restoration, sharpness, and tiled decoding/diffusion are recorded for reproducibility but not yet
-            forwarded — their Draw Things wire format hasn&apos;t been verified against a live instance.
+            Sampler/steps/guidance/seed are sent to Draw Things (scheduler is recorded but never sent — see above).
+            CLIP skip, shift, refiner, upscaler, high-res fix, face restoration, sharpness, and tiled
+            decoding/diffusion are recorded for reproducibility but not yet forwarded — their Draw Things wire format
+            hasn&apos;t been verified against a live instance.
           </p>
 
           {job.references.length > 0 && (

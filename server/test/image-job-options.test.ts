@@ -34,6 +34,7 @@ function completedJob(): ImageJob {
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: 'realvisxl_v4.0_q6p_q8p.ckpt',
     variationGroupId: null,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-02T00:00:00.000Z',
@@ -53,6 +54,13 @@ test('duplicateImageJob clears output, originalFilename, and resets status to dr
   assert.equal(copy.output, null)
   assert.equal(copy.originalFilename, null)
   assert.equal(copy.status, 'draft')
+})
+
+test('duplicateImageJob clears effectiveModel — a fresh draft has no verified effective model of its own yet', () => {
+  const original = completedJob()
+  assert.notEqual(original.effectiveModel, null) // sanity check the fixture actually has one to clear
+  const copy = duplicateImageJob(original)
+  assert.equal(copy.effectiveModel, null)
 })
 
 test('duplicateImageJob preserves prompt, negativePrompt, dimensions, purpose, and the Design Brief reference', () => {

@@ -153,6 +153,10 @@ export function duplicateImageJob(
     status: 'draft',
     output: null,
     originalFilename: null,
+    // A duplicate hasn't been generated yet, so it has no verified effective
+    // model of its own — carrying over the source's would misleadingly
+    // imply this draft was already confirmed against Draw Things.
+    effectiveModel: null,
     variationGroupId: overrides?.variationGroupId ?? null,
     createdAt: now,
     updatedAt: now,

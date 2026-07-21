@@ -8,7 +8,18 @@ import {
   resolveNativeDimensions,
   validateCustomDimensions,
 } from '../../shared/destinationPresets.ts'
-import { getModelProfile, MODEL_PROFILES, MODEL_PROFILES_VERSION, supportsControl } from '../../shared/modelProfiles.ts'
+import {
+  DRAW_THINGS_SAMPLERS,
+  DRAW_THINGS_SCHEDULERS,
+  DrawThingsSamplerSchema,
+  DrawThingsSchedulerSchema,
+  getModelProfile,
+  MODEL_PROFILES,
+  MODEL_PROFILES_VERSION,
+  supportsControl,
+  supportsSampler,
+  supportsScheduler,
+} from '../../shared/modelProfiles.ts'
 import { influenceToWeight, roleToControlType, suggestControlForReference } from '../../shared/referenceGuidance.ts'
 
 test('destination presets are centrally defined and versioned', () => {
@@ -121,4 +132,73 @@ test('suggestControlForReference returns a complete, visible suggestion for a co
   assert.ok(suggestion)
   assert.equal(suggestion?.type, 'depth')
   assert.equal(suggestion?.weight, influenceToWeight('high'))
+})
+
+test('DRAW_THINGS_SAMPLERS is the exact set confirmed by the installed Draw Things HTTP API, plus the "default" sentinel', () => {
+  assert.equal(DRAW_THINGS_SAMPLERS[0], 'default')
+  for (const confirmed of [
+    'DPM++ 2M Karras',
+    'Euler a',
+    'DDIM',
+    'PLMS',
+    'DPM++ SDE Karras',
+    'UniPC',
+    'LCM',
+    'Euler A Substep',
+    'DPM++ SDE Substep',
+    'TCD',
+    'Euler A Trailing',
+    'DPM++ SDE Trailing',
+    'DPM++ 2M AYS',
+    'Euler A AYS',
+    'DPM++ SDE AYS',
+    'DPM++ 2M Trailing',
+    'DDIM Trailing',
+    'UniPC Trailing',
+    'UniPC AYS',
+    'TCD Trailing',
+  ]) {
+    assert.ok((DRAW_THINGS_SAMPLERS as readonly string[]).includes(confirmed), `missing confirmed sampler "${confirmed}"`)
+  }
+})
+
+test('DRAW_THINGS_SCHEDULERS is only "default" — Draw Things rejects a separate scheduler field entirely', () => {
+  assert.deepEqual(DRAW_THINGS_SCHEDULERS, ['default'])
+})
+
+test('DrawThingsSamplerSchema accepts every confirmed value and rejects free text that was never verified', () => {
+  assert.equal(DrawThingsSamplerSchema.safeParse('DPM++ 2M Karras').success, true)
+  assert.equal(DrawThingsSamplerSchema.safeParse('Euler a').success, true)
+  assert.equal(DrawThingsSamplerSchema.safeParse('default').success, true)
+  assert.equal(DrawThingsSamplerSchema.safeParse('euler_a').success, false)
+  assert.equal(DrawThingsSamplerSchema.safeParse('karras').success, false)
+  assert.equal(DrawThingsSamplerSchema.safeParse('').success, false)
+})
+
+test('DrawThingsSchedulerSchema accepts only "default" and rejects everything else, including plausible-looking values', () => {
+  assert.equal(DrawThingsSchedulerSchema.safeParse('default').success, true)
+  assert.equal(DrawThingsSchedulerSchema.safeParse('karras').success, false)
+  assert.equal(DrawThingsSchedulerSchema.safeParse('Karras').success, false)
+})
+
+test('every model profile references the same exported DRAW_THINGS_SAMPLERS/DRAW_THINGS_SCHEDULERS — no per-profile invented subsets', () => {
+  for (const profile of MODEL_PROFILES) {
+    assert.deepEqual(profile.supportedSamplers, DRAW_THINGS_SAMPLERS)
+    assert.deepEqual(profile.supportedSchedulers, DRAW_THINGS_SCHEDULERS)
+  }
+})
+
+test('supportsSampler accepts every confirmed sampler and rejects an unverified free-text value', () => {
+  const sdxl = getModelProfile('sdxl-base')
+  assert.equal(supportsSampler(sdxl, 'DPM++ 2M Karras'), true)
+  assert.equal(supportsSampler(sdxl, 'default'), true)
+  assert.equal(supportsSampler(sdxl, 'euler_a'), false)
+  assert.equal(supportsSampler(sdxl, 'not a real sampler'), false)
+})
+
+test('supportsScheduler accepts only "default" and rejects any other value for every model profile', () => {
+  for (const profile of MODEL_PROFILES) {
+    assert.equal(supportsScheduler(profile, 'default'), true)
+    assert.equal(supportsScheduler(profile, 'karras'), false)
+  }
 })

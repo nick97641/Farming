@@ -448,7 +448,7 @@ test('normalizeLegacyProject repairs advancedSettings field-by-field, keeping va
       {
         id: 'job-advanced',
         advancedSettings: {
-          sampler: 'euler',
+          sampler: 'DPM++ 2M Karras',
           steps: 'not-a-number',
           seedMode: 'sideways',
           refinerEnabled: 'yes',
@@ -460,11 +460,28 @@ test('normalizeLegacyProject repairs advancedSettings field-by-field, keeping va
   const settings = normalized.imageJobs[0].advancedSettings as Record<string, unknown>
   const defaults = createDefaultAdvancedSettings()
   // A structurally valid value already present is preserved, not overwritten.
-  assert.equal(settings.sampler, 'euler')
+  assert.equal(settings.sampler, 'DPM++ 2M Karras')
   // Invalid values fall back field-by-field to the default, not the whole object.
   assert.equal(settings.steps, defaults.steps)
   assert.equal(settings.seedMode, defaults.seedMode)
   assert.equal(settings.refinerEnabled, defaults.refinerEnabled)
+  assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(normalized.imageJobs[0]).success)
+})
+
+test('normalizeLegacyProject falls back a legacy sampler/scheduler value outside the Draw-Things-confirmed set to the default, rather than guessing it was valid', () => {
+  const raw = {
+    id: 'legacy-25',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      { id: 'job-bad-sampler', advancedSettings: { sampler: 'euler_a', scheduler: 'karras' } },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { imageJobs: Record<string, unknown>[] }
+  const settings = normalized.imageJobs[0].advancedSettings as Record<string, unknown>
+  const defaults = createDefaultAdvancedSettings()
+  assert.equal(settings.sampler, defaults.sampler)
+  assert.equal(settings.scheduler, defaults.scheduler)
   assert.ok(ProjectSchema.shape.imageJobs.element.safeParse(normalized.imageJobs[0]).success)
 })
 

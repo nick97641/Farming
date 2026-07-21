@@ -68,6 +68,7 @@ async function createProjectWithJob(overrides: Partial<ImageJob> = {}): Promise<
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,
@@ -297,6 +298,7 @@ test('deleting a job leaves a non-owned legacy-named file untouched', async () =
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,
@@ -341,4 +343,25 @@ test('generate is blocked by the server-side factuality gate when a locked fact 
   const reloadedJob = reloaded.imageJobs.find((j) => j.id === job.id)
   assert.equal(reloadedJob?.status, 'draft')
   assert.equal(reloadedJob?.output, null)
+})
+
+test('generate accepts a Draw-Things-confirmed sampler value and proceeds past local validation', async () => {
+  const { project, job } = await createProjectWithJob({
+    advancedSettings: { ...createDefaultAdvancedSettings(), sampler: 'DPM++ 2M Karras' },
+  })
+  // Force an unreachable Draw Things regardless of whether a real instance
+  // happens to be running on this machine right now — the point of this
+  // test is only "did local sampler/scheduler validation let it through,"
+  // not "did a real generation succeed."
+  const previousDrawThingsUrl = process.env.DRAW_THINGS_URL
+  process.env.DRAW_THINGS_URL = 'http://127.0.0.1:1'
+  try {
+    const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/generate`, { method: 'POST' })
+    // 502 (Draw Things unreachable), never 400 -- proves the valid sampler
+    // was not rejected by local validation.
+    assert.equal(res.status, 502)
+  } finally {
+    if (previousDrawThingsUrl === undefined) delete process.env.DRAW_THINGS_URL
+    else process.env.DRAW_THINGS_URL = previousDrawThingsUrl
+  }
 })

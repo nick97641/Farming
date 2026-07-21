@@ -149,6 +149,7 @@ test('a completed image job with an output persists unchanged through save and r
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,
@@ -159,6 +160,42 @@ test('a completed image job with an output persists unchanged through save and r
   const reloaded = await readProject('image-job-round-trip')
   assert.equal(reloaded.imageJobs.length, 1)
   assert.deepEqual(reloaded.imageJobs[0], job)
+})
+
+test('writeProject rejects a sampler value outside the Draw-Things-confirmed set, before it can ever reach a generate request', async () => {
+  const project = await createProject({ id: 'invalid-sampler-rejected', title: 'Test', topic: 'hydroponics' })
+  const now = new Date().toISOString()
+  const job: ImageJob = {
+    id: 'job-invalid-sampler',
+    sourceDesignBriefUpdatedAt: null,
+    purpose: 'custom',
+    label: '',
+    status: 'draft',
+    prompt: 'a prompt',
+    negativePrompt: '',
+    width: 1024,
+    height: 1024,
+    sourceType: 'imported',
+    output: null,
+    originalFilename: null,
+    policyVersion: ENRICHMENT_POLICY_VERSION,
+    userDescription: '',
+    structuredRequirements: createDefaultStructuredRequirements(),
+    enrichmentRecipe: null,
+    destination: null,
+    references: [],
+    modelProfileId: DEFAULT_MODEL_PROFILE_ID,
+    // Cast through unknown: TypeScript's own DrawThingsSampler union already
+    // prevents this at compile time — this simulates a hand-edited or
+    // pre-validation legacy value reaching writeProject at runtime.
+    advancedSettings: { ...createDefaultAdvancedSettings(), sampler: 'euler_a' as unknown as ImageJob['advancedSettings']['sampler'] },
+    controls: [],
+    effectiveModel: null,
+    variationGroupId: null,
+    createdAt: now,
+    updatedAt: now,
+  }
+  await assert.rejects(() => writeProject({ ...project, imageJobs: [job] }))
 })
 
 test('ordinary project saves cannot edit or overwrite a completed image job', async () => {
@@ -190,6 +227,7 @@ test('ordinary project saves cannot edit or overwrite a completed image job', as
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,
@@ -227,6 +265,7 @@ test('ordinary project saves cannot remove a completed image job', async () => {
     modelProfileId: DEFAULT_MODEL_PROFILE_ID,
     advancedSettings: createDefaultAdvancedSettings(),
     controls: [],
+    effectiveModel: null,
     variationGroupId: null,
     createdAt: now,
     updatedAt: now,
