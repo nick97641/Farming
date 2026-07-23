@@ -14,8 +14,19 @@ test('createEmptyProject seeds the new research fields with empty, schema-valid 
   assert.deepEqual(project.research.aiExtracted.competitorAngles, [])
   assert.equal(project.selectedIdeaId, null)
   assert.equal(project.designBrief, null)
+  assert.equal(project.content.pdfDraft, '')
 
   const result = ProjectSchema.safeParse(project)
+  assert.ok(result.success)
+})
+
+test('ContentSchema accepts a populated pdfDraft alongside longFormScript', () => {
+  const project = createEmptyProject({ id: 'schema-test-content', title: 'Test', topic: 'test topic' })
+  const withContent = {
+    ...project,
+    content: { ...project.content, longFormScript: 'Script text', pdfDraft: 'Guide text' },
+  }
+  const result = ProjectSchema.safeParse(withContent)
   assert.ok(result.success)
 })
 

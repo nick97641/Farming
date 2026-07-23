@@ -5,6 +5,7 @@ import {
   deleteImageJob as apiDeleteImageJob,
   deleteProject,
   deleteReferencePhoto as apiDeleteReferencePhoto,
+  generateContent as apiGenerateContent,
   generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
   getProject,
@@ -12,8 +13,10 @@ import {
   importReferencePhoto as apiImportReferencePhoto,
   organizeResearch as apiOrganizeResearch,
   saveProject,
+  type ContentGenerationTarget,
 } from '../lib/api'
 import { duplicateImageJob } from '../lib/imageJobOptions'
+import { ContentTab } from './workspace/ContentTab'
 import { DesignBriefTab } from './workspace/DesignBriefTab'
 import { IdeasTab } from './workspace/IdeasTab'
 import { ImageGenerationTab } from './workspace/ImageGenerationTab'
@@ -36,7 +39,7 @@ const TABS = [
   { id: 'ideas', label: 'Ideas', enabled: true },
   { id: 'brief', label: 'Design Brief', enabled: true },
   { id: 'images', label: 'Image Generation', enabled: true },
-  { id: 'content', label: 'Content', enabled: false },
+  { id: 'content', label: 'Content', enabled: true },
   { id: 'assets', label: 'Assets', enabled: false },
   { id: 'products', label: 'Products', enabled: false },
   { id: 'export', label: 'Export', enabled: false },
@@ -62,6 +65,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [canCancelGenerate, setCanCancelGenerate] = useState(false)
   const [referenceImportingJobId, setReferenceImportingJobId] = useState<string | null>(null)
   const [referenceImportError, setReferenceImportError] = useState<string | null>(null)
+  const [generatingContentTarget, setGeneratingContentTarget] = useState<ContentGenerationTarget | null>(null)
+  const [generateContentError, setGenerateContentError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
   const cancelGenerateRef = useRef(false)
@@ -78,6 +83,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setImportImageError(null)
     setGenerateImageError(null)
     setReferenceImportError(null)
+    setGenerateContentError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -176,6 +182,32 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
       setGenerateIdeasError(err instanceof Error ? err.message : 'Failed to generate ideas with AI')
     } finally {
       setGeneratingIdeas(false)
+    }
+  }
+
+  async function handleGenerateContent(target: ContentGenerationTarget) {
+    if (!project) return
+    setGeneratingContentTarget(target)
+    setGenerateContentError(null)
+    try {
+      // Same reasoning as handleGenerateIdeas: generation reads the Design
+      // Brief from the persisted file server-side, so flush pending edits first.
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const text = await apiGenerateContent(project.id, target)
+      updateProject((current) => ({
+        ...current,
+        content:
+          target === 'youtube-script'
+            ? { ...current.content, longFormScript: text }
+            : { ...current.content, pdfDraft: text },
+      }))
+    } catch (err) {
+      setGenerateContentError(err instanceof Error ? err.message : 'Failed to generate content with AI')
+    } finally {
+      setGeneratingContentTarget(null)
     }
   }
 
@@ -429,6 +461,16 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onRemoveReference={handleRemoveReference}
             referenceImportingJobId={referenceImportingJobId}
             referenceImportError={referenceImportError}
+          />
+        )}
+        {activeTab === 'content' && (
+          <ContentTab
+            designBrief={project.designBrief}
+            content={project.content}
+            onChangeContent={(content) => updateProject((current) => ({ ...current, content }))}
+            onGenerate={handleGenerateContent}
+            generatingTarget={generatingContentTarget}
+            generateError={generateContentError}
           />
         )}
       </div>

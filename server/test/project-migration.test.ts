@@ -105,9 +105,34 @@ test('normalizeLegacyProject backfills Phase 3 idea fields while preserving orig
   assert.deepEqual(idea.sourceResearch, [])
   assert.equal(idea.confidence, 'low')
   assert.equal(idea.updatedAt, '2024-01-01T00:00:00.000Z')
+  assert.equal(idea.productionStage, 'idea')
 
   const validated = ProjectSchema.shape.ideas.element.safeParse(idea)
   assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject falls back to "idea" for an unrecognized productionStage value', () => {
+  const legacy = {
+    id: 'legacy-4b',
+    research: {},
+    ideas: [
+      {
+        id: 'idea-old-2',
+        title: 'Idea with a stale productionStage',
+        hook: '',
+        format: '',
+        targetViewer: '',
+        problemSolved: '',
+        visualConcept: '',
+        pdfOrTemplateOpportunity: '',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        productionStage: 'live',
+      },
+    ],
+  }
+
+  const normalized = normalizeLegacyProject(legacy) as { ideas: Record<string, unknown>[] }
+  assert.equal(normalized.ideas[0].productionStage, 'idea')
 })
 
 test('normalizeLegacyProject defaults selectedIdeaId and designBrief to null when both are missing entirely', () => {
@@ -605,4 +630,32 @@ test('readProject loads a project.json written before selectedIdeaId or designBr
   assert.equal(loaded.designBrief, null)
   assert.deepEqual(loaded.imageJobs, [])
   assert.ok(ProjectSchema.safeParse(loaded).success)
+})
+
+test('normalizeLegacyProject defaults content to empty values including pdfDraft when the field is missing entirely', () => {
+  const raw = { id: 'legacy-20', research: {}, ideas: [] }
+  const normalized = normalizeLegacyProject(raw) as { content: Record<string, unknown> }
+  assert.deepEqual(normalized.content, {
+    longFormScript: '',
+    pdfDraft: '',
+    shorts: [],
+    shotList: [],
+    thumbnailIdeas: [],
+    captions: [],
+  })
+})
+
+test('normalizeLegacyProject backfills a missing pdfDraft while preserving existing content field values', () => {
+  const raw = {
+    id: 'legacy-21',
+    research: {},
+    ideas: [],
+    content: { longFormScript: 'An existing script draft', shorts: [], shotList: [], thumbnailIdeas: [], captions: [] },
+  }
+  const normalized = normalizeLegacyProject(raw) as { content: Record<string, unknown> }
+  assert.equal(normalized.content.longFormScript, 'An existing script draft')
+  assert.equal(normalized.content.pdfDraft, '')
+
+  const validated = ProjectSchema.shape.content.safeParse(normalized.content)
+  assert.ok(validated.success)
 })

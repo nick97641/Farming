@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 
-import type { Confidence, Idea, IdeaContentType, IdeaStatus, Research } from '../../../shared/schema/project'
-import { CONTENT_TYPE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
+import type { Confidence, Idea, IdeaContentType, IdeaStatus, ProductionStage, Research } from '../../../shared/schema/project'
+import { CONTENT_TYPE_OPTIONS, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
 import { GeneratedIdeaReview } from './GeneratedIdeaReview'
 import { IdeaCard } from './IdeaCard'
 import { IdeaEditor } from './IdeaEditor'
@@ -41,6 +41,7 @@ function createBlankIdea(): Idea {
     confidence: 'low',
     notes: '',
     updatedAt: now,
+    productionStage: 'idea',
   }
 }
 
@@ -61,6 +62,7 @@ export function IdeasTab({
 }: Props) {
   const [editingIdeaId, setEditingIdeaId] = useState<string | null>(null)
   const [statusFilter, setStatusFilter] = useState<'all' | IdeaStatus>('all')
+  const [productionStageFilter, setProductionStageFilter] = useState<'all' | ProductionStage>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | IdeaContentType>('all')
   const [confidenceFilter, setConfidenceFilter] = useState<'all' | Confidence>('all')
   const [sortBy, setSortBy] = useState<SortOption>('newest')
@@ -71,6 +73,7 @@ export function IdeasTab({
   const visibleIdeas = useMemo(() => {
     let list = ideas
     if (statusFilter !== 'all') list = list.filter((idea) => idea.status === statusFilter)
+    if (productionStageFilter !== 'all') list = list.filter((idea) => idea.productionStage === productionStageFilter)
     if (contentTypeFilter !== 'all') list = list.filter((idea) => idea.contentType === contentTypeFilter)
     if (confidenceFilter !== 'all') list = list.filter((idea) => idea.confidence === confidenceFilter)
 
@@ -80,7 +83,7 @@ export function IdeasTab({
     if (sortBy === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
     if (sortBy === 'confidence') sorted.sort((a, b) => CONFIDENCE_RANK[b.confidence] - CONFIDENCE_RANK[a.confidence])
     return sorted
-  }, [ideas, statusFilter, contentTypeFilter, confidenceFilter, sortBy])
+  }, [ideas, statusFilter, productionStageFilter, contentTypeFilter, confidenceFilter, sortBy])
 
   function handleCreateIdea() {
     const blank = createBlankIdea()
@@ -195,6 +198,20 @@ export function IdeasTab({
           <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | IdeaStatus)}>
             <option value="all">All</option>
             {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Production stage
+          <select
+            value={productionStageFilter}
+            onChange={(event) => setProductionStageFilter(event.target.value as 'all' | ProductionStage)}
+          >
+            <option value="all">All</option>
+            {PRODUCTION_STAGE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>

@@ -1,5 +1,6 @@
 import express from 'express'
 
+import { contentRouter } from './routes/content.ts'
 import { healthRouter } from './routes/health.ts'
 import { ideasRouter } from './routes/ideas.ts'
 import { imageJobsRouter } from './routes/image-jobs.ts'
@@ -17,6 +18,7 @@ app.use('/api', projectsRouter)
 app.use('/api', researchRouter)
 app.use('/api', ideasRouter)
 app.use('/api', imageJobsRouter)
+app.use('/api', contentRouter)
 
 app.listen(port, () => {
   console.log(`Farming backend listening on http://localhost:${port}`)

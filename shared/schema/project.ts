@@ -114,6 +114,13 @@ export type IdeaContentType = z.infer<typeof IdeaContentTypeSchema>
 export const IdeaStatusSchema = z.enum(['draft', 'shortlisted', 'rejected', 'approved'])
 export type IdeaStatus = z.infer<typeof IdeaStatusSchema>
 
+// Tracks real-world production progress, entirely independent of the triage
+// `status` above (an idea can be `approved` and still be at any production
+// stage). Set only by direct user action in the UI — no generation route or
+// automation anywhere in this codebase is ever allowed to change it.
+export const ProductionStageSchema = z.enum(['idea', 'draft', 'created', 'published'])
+export type ProductionStage = z.infer<typeof ProductionStageSchema>
+
 // What part of the project's research a sourceResearch entry points at.
 // sourceLink/verifiedFact reuse the original item's real id. The list-based
 // kinds have no natural id in Phase 2's schema, so their referencedId is a
@@ -175,6 +182,7 @@ export const IdeaSchema = z.object({
   confidence: ConfidenceSchema,
   notes: z.string(),
   updatedAt: z.string(),
+  productionStage: ProductionStageSchema,
 })
 export type Idea = z.infer<typeof IdeaSchema>
 
@@ -564,6 +572,7 @@ export type Caption = z.infer<typeof CaptionSchema>
 
 export const ContentSchema = z.object({
   longFormScript: z.string(),
+  pdfDraft: z.string(),
   shorts: z.array(ShortSchema),
   shotList: z.array(ShotListItemSchema),
   thumbnailIdeas: z.array(ThumbnailIdeaSchema),
@@ -640,6 +649,7 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
     imageJobs: [],
     content: {
       longFormScript: '',
+      pdfDraft: '',
       shorts: [],
       shotList: [],
       thumbnailIdeas: [],

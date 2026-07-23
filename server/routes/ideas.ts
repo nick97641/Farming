@@ -80,6 +80,7 @@ ideasRouter.post('/projects/:id/ideas/generate', async (req, res) => {
     confidence: idea.confidence,
     notes: idea.notes,
     updatedAt: now,
+    productionStage: 'idea',
   }))
 
   res.json({ ideas: drafts })

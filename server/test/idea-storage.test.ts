@@ -42,6 +42,7 @@ function blankIdea(overrides: Partial<Idea> = {}): Idea {
     confidence: 'medium',
     notes: '',
     updatedAt: now,
+    productionStage: 'idea',
     ...overrides,
   }
 }

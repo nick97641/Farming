@@ -82,6 +82,7 @@ test('a selected approved idea and its designBrief persist unchanged through sav
     confidence: 'medium',
     notes: '',
     updatedAt: now,
+    productionStage: 'idea',
   }
 
   await writeProject({

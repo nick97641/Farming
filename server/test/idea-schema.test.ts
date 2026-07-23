@@ -25,6 +25,7 @@ function validIdea() {
     confidence: 'medium',
     notes: '',
     updatedAt: now,
+    productionStage: 'idea',
   }
 }
 
@@ -63,6 +64,19 @@ test('IdeaSchema rejects an invalid confidence value', () => {
 test('IdeaSchema rejects an idea missing a required field', () => {
   const idea = validIdea() as Record<string, unknown>
   delete idea.summary
+  const result = IdeaSchema.safeParse(idea)
+  assert.equal(result.success, false)
+})
+
+test('IdeaSchema accepts each valid productionStage value', () => {
+  for (const productionStage of ['idea', 'draft', 'created', 'published']) {
+    const result = IdeaSchema.safeParse({ ...validIdea(), productionStage })
+    assert.ok(result.success, `expected productionStage "${productionStage}" to be accepted`)
+  }
+})
+
+test('IdeaSchema rejects an invalid productionStage value', () => {
+  const idea = { ...validIdea(), productionStage: 'live' }
   const result = IdeaSchema.safeParse(idea)
   assert.equal(result.success, false)
 })

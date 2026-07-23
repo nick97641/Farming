@@ -20,6 +20,7 @@ import {
   ImageReferenceInfluenceSchema,
   ImageReferenceRoleSchema,
   ImageSeedModeSchema,
+  ProductionStageSchema,
 } from '../../shared/schema/project.ts'
 
 type PlainRecord = Record<string, unknown>
@@ -30,6 +31,7 @@ function isRecord(value: unknown): value is PlainRecord {
 
 const VALID_CONTENT_TYPES = new Set<string>(IdeaContentTypeSchema.options)
 const VALID_IDEA_STATUSES = new Set<string>(IdeaStatusSchema.options)
+const VALID_PRODUCTION_STAGES = new Set<string>(ProductionStageSchema.options)
 const VALID_CONFIDENCE_LEVELS = new Set<string>(ConfidenceSchema.options)
 const VALID_DESIGN_BRIEF_STATUSES = new Set<string>(DesignBriefStatusSchema.options)
 const VALID_IMAGE_JOB_PURPOSES = new Set<string>(ImageJobPurposeSchema.options)
@@ -103,6 +105,10 @@ function normalizeIdea(raw: unknown): unknown {
       typeof idea.confidence === 'string' && VALID_CONFIDENCE_LEVELS.has(idea.confidence) ? idea.confidence : 'low',
     notes: typeof idea.notes === 'string' ? idea.notes : '',
     updatedAt: typeof idea.updatedAt === 'string' ? idea.updatedAt : createdAt,
+    productionStage:
+      typeof idea.productionStage === 'string' && VALID_PRODUCTION_STAGES.has(idea.productionStage)
+        ? idea.productionStage
+        : 'idea',
   }
 }
 
@@ -385,12 +391,29 @@ function normalizeImageJob(raw: unknown): unknown {
   }
 }
 
+// Backfills Content fields introduced after a project.json may have first
+// been written (pdfDraft) while leaving every other field — including the
+// array-shaped ones this codebase doesn't yet have a producing UI for —
+// passed through as-is, same reasoning as the array fields in
+// normalizeLegacyProject's own research block.
+function normalizeContent(raw: unknown): unknown {
+  const source = isRecord(raw) ? raw : {}
+  return {
+    longFormScript: typeof source.longFormScript === 'string' ? source.longFormScript : '',
+    pdfDraft: typeof source.pdfDraft === 'string' ? source.pdfDraft : '',
+    shorts: Array.isArray(source.shorts) ? source.shorts : [],
+    shotList: Array.isArray(source.shotList) ? source.shotList : [],
+    thumbnailIdeas: Array.isArray(source.thumbnailIdeas) ? source.thumbnailIdeas : [],
+    captions: Array.isArray(source.captions) ? source.captions : [],
+  }
+}
+
 // Fills in research fields introduced after a project.json may have first
 // been written (Phase 1 → Phase 2 → confidence field), and upgrades older
 // flat string arrays into their current shape, so previously saved projects
 // keep loading instead of being rejected as corrupt. Only touches `research`,
-// `ideas`, `selectedIdeaId`, `designBrief`, and `imageJobs`; every other
-// top-level field is passed through untouched.
+// `ideas`, `selectedIdeaId`, `designBrief`, `imageJobs`, and `content`; every
+// other top-level field is passed through untouched.
 export function normalizeLegacyProject(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
 
@@ -438,5 +461,6 @@ export function normalizeLegacyProject(raw: unknown): unknown {
     imageJobs: Array.isArray(raw.imageJobs)
       ? raw.imageJobs.map(normalizeImageJob).filter((job): job is NonNullable<typeof job> => job !== null)
       : [],
+    content: normalizeContent(raw.content),
   }
 }

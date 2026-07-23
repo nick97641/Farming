@@ -1,4 +1,4 @@
-import type { IdeaContentType, IdeaStatus } from '../../shared/schema/project'
+import type { IdeaContentType, IdeaStatus, ProductionStage } from '../../shared/schema/project'
 
 export const CONTENT_TYPE_OPTIONS: { value: IdeaContentType; label: string }[] = [
   { value: 'youtube-video', label: 'YouTube video' },
@@ -27,3 +27,15 @@ export const CONTENT_TYPE_LABELS: Record<IdeaContentType, string> = Object.fromE
 export const STATUS_LABELS: Record<IdeaStatus, string> = Object.fromEntries(
   STATUS_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<IdeaStatus, string>
+
+// Manual production pipeline, independent of the triage STATUS_OPTIONS above.
+export const PRODUCTION_STAGE_OPTIONS: { value: ProductionStage; label: string }[] = [
+  { value: 'idea', label: 'Idea' },
+  { value: 'draft', label: 'Draft' },
+  { value: 'created', label: 'Created' },
+  { value: 'published', label: 'Published' },
+]
+
+export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = Object.fromEntries(
+  PRODUCTION_STAGE_OPTIONS.map((option) => [option.value, option.label]),
+) as Record<ProductionStage, string>

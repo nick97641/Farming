@@ -4,6 +4,7 @@ const API_BASE = '/api'
 
 export type HealthResponse = { status: string; timestamp: string }
 export type OllamaStatusResponse = { connected: true; version: string } | { connected: false; error: string }
+export type ContentGenerationTarget = 'youtube-script' | 'pdf-draft'
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -116,4 +117,12 @@ export async function importReferencePhoto(
 
 export function deleteReferencePhoto(projectId: string, jobId: string, referenceId: string): Promise<Project> {
   return request(`/projects/${projectId}/image-jobs/${jobId}/references/${referenceId}`, { method: 'DELETE' })
+}
+
+export async function generateContent(projectId: string, target: ContentGenerationTarget): Promise<string> {
+  const result = await request<{ text: string }>(`/projects/${projectId}/content/generate`, {
+    method: 'POST',
+    body: JSON.stringify({ target }),
+  })
+  return result.text
 }

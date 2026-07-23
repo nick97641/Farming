@@ -1,5 +1,5 @@
 import type { Confidence, Idea, Research } from '../../../shared/schema/project'
-import { CONTENT_TYPE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
+import { CONTENT_TYPE_OPTIONS, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
 import { isReferenceAvailable } from '../../lib/researchReferences'
 import { ResearchPicker } from './ResearchPicker'
 
@@ -162,6 +162,19 @@ export function IdeaEditor({ idea, research, onChange, onClose, onDelete }: Prop
           Status
           <select value={idea.status} onChange={(event) => patch({ status: event.target.value as Idea['status'] })}>
             {STATUS_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          Production stage
+          <select
+            value={idea.productionStage}
+            onChange={(event) => patch({ productionStage: event.target.value as Idea['productionStage'] })}
+          >
+            {PRODUCTION_STAGE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
