@@ -55,9 +55,9 @@ function sampleDesignBrief(): DesignBrief {
   }
 }
 
-async function createProjectWithDesignBrief(designBrief: DesignBrief | null): Promise<Project> {
+async function createProjectWithDesignBrief(designBrief: DesignBrief | null, pdfDraft = ''): Promise<Project> {
   const project = await createProject({ id: randomUUID(), title: 'Content Route Test', topic: 'hydroponics' })
-  return writeProject({ ...project, designBrief })
+  return writeProject({ ...project, designBrief, content: { ...project.content, pdfDraft } })
 }
 
 // Starts a tiny stand-in for Ollama's /api/generate endpoint on an ephemeral
@@ -103,6 +103,27 @@ test('content/generate rejects a project with no Design Brief', async () => {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ target: 'youtube-script' }),
   })
+  assert.equal(res.status, 400)
+})
+
+test('content/pdf returns a named PDF attachment built from the saved editable draft', async () => {
+  const project = await createProjectWithDesignBrief(
+    sampleDesignBrief(),
+    '## Getting Started\n\nA saved PDF guide draft.',
+  )
+  const res = await fetch(`${baseUrl}/projects/${project.id}/content/pdf`)
+
+  assert.equal(res.status, 200)
+  assert.equal(res.headers.get('content-type'), 'application/pdf')
+  assert.equal(res.headers.get('content-disposition'), 'attachment; filename="dwc-lettuce-starter-guide.pdf"')
+  const bytes = new Uint8Array(await res.arrayBuffer())
+  assert.equal(new TextDecoder().decode(bytes.slice(0, 8)), '%PDF-1.4')
+})
+
+test('content/pdf rejects an empty saved PDF draft', async () => {
+  const project = await createProjectWithDesignBrief(sampleDesignBrief())
+  const res = await fetch(`${baseUrl}/projects/${project.id}/content/pdf`)
+
   assert.equal(res.status, 400)
 })
 

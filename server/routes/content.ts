@@ -5,11 +5,40 @@ import {
   generateContent,
   OllamaContentGenerationError,
 } from '../lib/ollama-client.ts'
+import { buildTextPdf, pdfFilename } from '../lib/pdfExport.ts'
 import { ProjectDataCorruptError, ProjectNotFoundError, readProject } from '../lib/storage.ts'
 
 export const contentRouter = Router()
 
 const GenerateContentBodySchema = ContentGenerationTargetSchema
+
+contentRouter.get('/projects/:id/content/pdf', async (req, res) => {
+  let project
+  try {
+    project = await readProject(req.params.id)
+  } catch (error) {
+    if (error instanceof ProjectNotFoundError) {
+      res.status(404).json({ error: error.message })
+      return
+    }
+    if (error instanceof ProjectDataCorruptError) {
+      res.status(500).json({ error: error.message })
+      return
+    }
+    throw error
+  }
+
+  if (!project.content.pdfDraft.trim()) {
+    res.status(400).json({ error: 'Create a PDF draft before exporting' })
+    return
+  }
+
+  const title = project.designBrief?.title || project.title
+  const pdf = buildTextPdf({ title, draft: project.content.pdfDraft })
+  res.setHeader('Content-Type', 'application/pdf')
+  res.setHeader('Content-Disposition', `attachment; filename="${pdfFilename(title)}"`)
+  res.send(Buffer.from(pdf))
+})
 
 // Generation only ever reads the project and calls Ollama — it never writes.
 // The client reviews the returned text and decides whether/how to merge it

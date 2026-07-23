@@ -8,10 +8,12 @@ import {
   generateContent as apiGenerateContent,
   generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
+  getContentPdfUrl,
   getProject,
   importImageJobFile as apiImportImageJobFile,
   importReferencePhoto as apiImportReferencePhoto,
   organizeResearch as apiOrganizeResearch,
+  renderVideo as apiRenderVideo,
   saveProject,
   type ContentGenerationTarget,
 } from '../lib/api'
@@ -22,6 +24,7 @@ import { IdeasTab } from './workspace/IdeasTab'
 import { ImageGenerationTab } from './workspace/ImageGenerationTab'
 import { OverviewTab } from './workspace/OverviewTab'
 import { ResearchTab } from './workspace/ResearchTab'
+import { VideoTab } from './workspace/VideoTab'
 
 type Props = {
   projectId: string
@@ -40,6 +43,7 @@ const TABS = [
   { id: 'brief', label: 'Design Brief', enabled: true },
   { id: 'images', label: 'Image Generation', enabled: true },
   { id: 'content', label: 'Content', enabled: true },
+  { id: 'video', label: 'Video', enabled: true },
   { id: 'assets', label: 'Assets', enabled: false },
   { id: 'products', label: 'Products', enabled: false },
   { id: 'export', label: 'Export', enabled: false },
@@ -67,6 +71,10 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [referenceImportError, setReferenceImportError] = useState<string | null>(null)
   const [generatingContentTarget, setGeneratingContentTarget] = useState<ContentGenerationTarget | null>(null)
   const [generateContentError, setGenerateContentError] = useState<string | null>(null)
+  const [exportingPdf, setExportingPdf] = useState(false)
+  const [exportPdfError, setExportPdfError] = useState<string | null>(null)
+  const [renderingVideo, setRenderingVideo] = useState(false)
+  const [renderVideoError, setRenderVideoError] = useState<string | null>(null)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
   const cancelGenerateRef = useRef(false)
@@ -84,6 +92,8 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setGenerateImageError(null)
     setReferenceImportError(null)
     setGenerateContentError(null)
+    setExportPdfError(null)
+    setRenderVideoError(null)
 
     getProject(projectId)
       .then(setProject)
@@ -208,6 +218,46 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
       setGenerateContentError(err instanceof Error ? err.message : 'Failed to generate content with AI')
     } finally {
       setGeneratingContentTarget(null)
+    }
+  }
+
+  async function handleExportPdf() {
+    if (!project) return
+    setExportingPdf(true)
+    setExportPdfError(null)
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const link = document.createElement('a')
+      link.href = getContentPdfUrl(project.id)
+      document.body.append(link)
+      link.click()
+      link.remove()
+    } catch (err) {
+      setExportPdfError(err instanceof Error ? err.message : 'Failed to export PDF')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
+  async function handleRenderVideo(imageJobIds: string[], narration: File) {
+    if (!project) return
+    setRenderingVideo(true)
+    setRenderVideoError(null)
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const result = await apiRenderVideo(project.id, imageJobIds, narration)
+      skipNextSave.current = true
+      setProject(result.project)
+    } catch (err) {
+      setRenderVideoError(err instanceof Error ? err.message : 'Failed to render the video')
+    } finally {
+      setRenderingVideo(false)
     }
   }
 
@@ -469,8 +519,22 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             content={project.content}
             onChangeContent={(content) => updateProject((current) => ({ ...current, content }))}
             onGenerate={handleGenerateContent}
+            onExportPdf={handleExportPdf}
             generatingTarget={generatingContentTarget}
             generateError={generateContentError}
+            exportingPdf={exportingPdf}
+            exportPdfError={exportPdfError}
+          />
+        )}
+        {activeTab === 'video' && (
+          <VideoTab
+            projectId={project.id}
+            script={project.content.longFormScript}
+            imageJobs={project.imageJobs}
+            assets={project.assets}
+            rendering={renderingVideo}
+            renderError={renderVideoError}
+            onRender={handleRenderVideo}
           />
         )}
       </div>

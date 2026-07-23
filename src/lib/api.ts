@@ -126,3 +126,31 @@ export async function generateContent(projectId: string, target: ContentGenerati
   })
   return result.text
 }
+
+export function getContentPdfUrl(projectId: string): string {
+  return `${API_BASE}/projects/${projectId}/content/pdf`
+}
+
+export async function renderVideo(
+  projectId: string,
+  imageJobIds: string[],
+  narration: File,
+): Promise<{ project: Project; videoAssetId: string }> {
+  const url =
+    `${API_BASE}/projects/${projectId}/video/render` +
+    `?imageJobIds=${encodeURIComponent(imageJobIds.join(','))}&filename=${encodeURIComponent(narration.name)}`
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': narration.type || 'application/octet-stream' },
+    body: narration,
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => null)
+    throw new Error((body as { error?: string } | null)?.error ?? `Video render failed with status ${response.status}`)
+  }
+  return (await response.json()) as { project: Project; videoAssetId: string }
+}
+
+export function getAssetFileUrl(projectId: string, assetId: string): string {
+  return `${API_BASE}/projects/${projectId}/assets/${assetId}/file`
+}

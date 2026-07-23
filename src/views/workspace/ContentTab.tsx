@@ -6,15 +6,28 @@ type Props = {
   content: Content
   onChangeContent: (content: Content) => void
   onGenerate: (target: ContentGenerationTarget) => void
+  onExportPdf: () => void
   generatingTarget: ContentGenerationTarget | null
   generateError: string | null
+  exportingPdf: boolean
+  exportPdfError: string | null
 }
 
 // Exactly two editable sections for the minimal launch — YouTube script and
 // PDF draft. shorts/shotList/thumbnailIdeas/captions have no generation path
 // or editor yet; they are preserved untouched on `content` by every update
 // here (only longFormScript/pdfDraft are ever patched).
-export function ContentTab({ designBrief, content, onChangeContent, onGenerate, generatingTarget, generateError }: Props) {
+export function ContentTab({
+  designBrief,
+  content,
+  onChangeContent,
+  onGenerate,
+  onExportPdf,
+  generatingTarget,
+  generateError,
+  exportingPdf,
+  exportPdfError,
+}: Props) {
   function requestGenerate(target: ContentGenerationTarget) {
     const existing = target === 'youtube-script' ? content.longFormScript : content.pdfDraft
     if (existing.trim()) {
@@ -70,6 +83,13 @@ export function ContentTab({ designBrief, content, onChangeContent, onGenerate, 
         <button type="button" onClick={() => requestGenerate('pdf-draft')} disabled={generatingTarget !== null}>
           {generatingTarget === 'pdf-draft' ? 'Generating...' : 'Generate with AI'}
         </button>
+        <button
+          type="button"
+          onClick={onExportPdf}
+          disabled={generatingTarget !== null || exportingPdf || !content.pdfDraft.trim()}
+        >
+          {exportingPdf ? 'Exporting...' : 'Export PDF'}
+        </button>
         <label className="field">
           Draft
           <textarea
@@ -82,6 +102,7 @@ export function ContentTab({ designBrief, content, onChangeContent, onGenerate, 
       </section>
 
       {generateError && <p className="error-text">{generateError}</p>}
+      {exportPdfError && <p className="error-text">{exportPdfError}</p>}
     </div>
   )
 }
