@@ -43,6 +43,7 @@ function blankIdea(overrides: Partial<Idea> = {}): Idea {
     notes: '',
     updatedAt: now,
     productionStage: 'idea',
+    youtubeEvidence: null,
     ...overrides,
   }
 }

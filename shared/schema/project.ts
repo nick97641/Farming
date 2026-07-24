@@ -157,6 +157,54 @@ export const IdeaSourceReferenceSchema = z.object({
 })
 export type IdeaSourceReference = z.infer<typeof IdeaSourceReferenceSchema>
 
+// One public YouTube video retrieved as evidence for an Opportunity Scout
+// finding. Every numeric field is exactly what the YouTube Data API reported
+// at retrievedAt — never estimated, adjusted, or reworded — so this record
+// stays trustworthy regardless of what any AI-authored prose says about it.
+// title/description are the video's own public text, kept only for display
+// and as labeled reference material for Ollama — never treated as
+// instructions by any part of this app.
+export const YoutubeVideoEvidenceSchema = z.object({
+  videoId: z.string(),
+  url: z.string(),
+  title: z.string(),
+  description: z.string(),
+  channelTitle: z.string(),
+  publishedAt: z.string(),
+  viewCount: z.number(),
+  likeCount: z.number().nullable(),
+  commentCount: z.number().nullable(),
+  // Derived once, at retrieval time, from the fields above — see
+  // computeViewsPerDay/computeEngagementRate in server/lib/youtube-client.ts.
+  // Never recomputed or altered afterward; a stale snapshot is more honest
+  // than a number that silently drifts from what was actually retrieved.
+  viewsPerDay: z.number(),
+  engagementRate: z.number().nullable(),
+  retrievedAt: z.string(),
+})
+export type YoutubeVideoEvidence = z.infer<typeof YoutubeVideoEvidenceSchema>
+
+// The complete, self-contained evidence record behind one Opportunity Scout
+// finding — the search phrase that found it, the exact YouTube Data API
+// query parameters used, every supporting video's public metrics, and the
+// deterministic (never AI-computed) summary signals derived from them.
+// Immutable once attached to an Idea: never edited, regenerated in place, or
+// silently refreshed — a new scout run produces new evidence on a new idea,
+// it never overwrites an existing one.
+export const YoutubeOpportunityEvidenceSchema = z.object({
+  seedTopic: z.string(),
+  searchPhrase: z.string(),
+  regionCode: z.string(),
+  languageCode: z.string(),
+  publishedAfter: z.string(),
+  totalResultsFound: z.number(),
+  medianViewsPerDay: z.number(),
+  outlierVideoIds: z.array(z.string()),
+  supportingVideos: z.array(YoutubeVideoEvidenceSchema),
+  retrievedAt: z.string(),
+})
+export type YoutubeOpportunityEvidence = z.infer<typeof YoutubeOpportunityEvidenceSchema>
+
 export const IdeaSchema = z.object({
   // Original Phase 0 fields, unchanged and still required — preserved as-is
   // for backward compatibility even though the Phase 3 UI doesn't populate
@@ -183,6 +231,10 @@ export const IdeaSchema = z.object({
   notes: z.string(),
   updatedAt: z.string(),
   productionStage: ProductionStageSchema,
+  // Null for every idea except one accepted from an Opportunity Scout
+  // finding — see YoutubeOpportunityEvidenceSchema above. Never set or
+  // changed by any code path other than accepting a scout draft.
+  youtubeEvidence: YoutubeOpportunityEvidenceSchema.nullable(),
 })
 export type Idea = z.infer<typeof IdeaSchema>
 

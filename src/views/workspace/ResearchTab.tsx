@@ -1,8 +1,10 @@
-import type { Research } from '../../../shared/schema/project'
+import type { Idea, Research } from '../../../shared/schema/project'
 import { ConfidentKeywordClassificationEditor } from '../../components/ConfidentKeywordClassificationEditor'
 import { ConfidentTextList } from '../../components/ConfidentTextList'
 import { EditableStringList } from '../../components/EditableStringList'
 import { KeywordClassificationEditor } from '../../components/KeywordClassificationEditor'
+import type { OpportunityScoutConfig } from '../../lib/api'
+import { OpportunityScoutSection } from './OpportunityScoutSection'
 import { SourceLinksEditor } from './SourceLinksEditor'
 import { VerifiedFactsEditor } from './VerifiedFactsEditor'
 
@@ -12,9 +14,35 @@ type Props = {
   onOrganize: () => void
   organizing: boolean
   organizeError: string | null
+  onFindOpportunities: (config: OpportunityScoutConfig) => void
+  findingOpportunities: boolean
+  findOpportunitiesError: string | null
+  pendingOpportunities: Idea[]
+  opportunityPhrasesWithNoResults: string[]
+  opportunityPhraseErrors: { phrase: string; error: string }[]
+  onAcceptOpportunity: (idea: Idea) => void
+  onAcceptAllOpportunities: () => void
+  onDiscardOpportunity: (ideaId: string) => void
+  onDiscardAllOpportunities: () => void
 }
 
-export function ResearchTab({ research, onChangeResearch, onOrganize, organizing, organizeError }: Props) {
+export function ResearchTab({
+  research,
+  onChangeResearch,
+  onOrganize,
+  organizing,
+  organizeError,
+  onFindOpportunities,
+  findingOpportunities,
+  findOpportunitiesError,
+  pendingOpportunities,
+  opportunityPhrasesWithNoResults,
+  opportunityPhraseErrors,
+  onAcceptOpportunity,
+  onAcceptAllOpportunities,
+  onDiscardOpportunity,
+  onDiscardAllOpportunities,
+}: Props) {
   function patchResearch(patch: Partial<Research>) {
     onChangeResearch({ ...research, ...patch })
   }
@@ -139,6 +167,19 @@ export function ResearchTab({ research, onChangeResearch, onOrganize, organizing
           onChange={(estimatedOpportunities) => patchAiExtracted({ estimatedOpportunities })}
         />
       </section>
+
+      <OpportunityScoutSection
+        onFindOpportunities={onFindOpportunities}
+        finding={findingOpportunities}
+        findError={findOpportunitiesError}
+        pendingOpportunities={pendingOpportunities}
+        phrasesWithNoResults={opportunityPhrasesWithNoResults}
+        phraseErrors={opportunityPhraseErrors}
+        onAccept={onAcceptOpportunity}
+        onAcceptAll={onAcceptAllOpportunities}
+        onDiscard={onDiscardOpportunity}
+        onDiscardAll={onDiscardAllOpportunities}
+      />
     </div>
   )
 }

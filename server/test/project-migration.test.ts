@@ -659,3 +659,75 @@ test('normalizeLegacyProject backfills a missing pdfDraft while preserving exist
   const validated = ProjectSchema.shape.content.safeParse(normalized.content)
   assert.ok(validated.success)
 })
+
+test('normalizeLegacyProject defaults youtubeEvidence to null on an idea missing the field entirely', () => {
+  const raw = {
+    id: 'legacy-22',
+    research: {},
+    ideas: [{ id: 'idea-old-3', title: 'Pre-scout idea', createdAt: '2024-01-01T00:00:00.000Z' }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.equal(normalized.ideas[0].youtubeEvidence, null)
+
+  const validated = ProjectSchema.shape.ideas.element.safeParse(normalized.ideas[0])
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject preserves a structurally valid youtubeEvidence and drops malformed supporting video entries within it', () => {
+  const raw = {
+    id: 'legacy-23',
+    research: {},
+    ideas: [
+      {
+        id: 'idea-scouted',
+        title: 'Scouted idea',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        youtubeEvidence: {
+          seedTopic: 'dwc lettuce',
+          searchPhrase: 'dwc lettuce for beginners',
+          regionCode: 'US',
+          languageCode: 'en',
+          publishedAfter: '2024-01-01T00:00:00.000Z',
+          totalResultsFound: 500,
+          medianViewsPerDay: 12.5,
+          outlierVideoIds: ['v1'],
+          supportingVideos: [
+            {
+              videoId: 'v1',
+              url: 'https://www.youtube.com/watch?v=v1',
+              title: 'A real video',
+              description: 'desc',
+              channelTitle: 'Channel',
+              publishedAt: '2024-01-01T00:00:00.000Z',
+              viewCount: 5000,
+              likeCount: 100,
+              commentCount: 10,
+              viewsPerDay: 50,
+              engagementRate: 0.02,
+              retrievedAt: '2024-01-02T00:00:00.000Z',
+            },
+            { title: 'Missing its videoId/url/numbers entirely' },
+          ],
+          retrievedAt: '2024-01-02T00:00:00.000Z',
+        },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  const evidence = normalized.ideas[0].youtubeEvidence as Record<string, unknown>
+  assert.equal(evidence.searchPhrase, 'dwc lettuce for beginners')
+  assert.equal((evidence.supportingVideos as unknown[]).length, 1)
+
+  const validated = ProjectSchema.shape.ideas.element.safeParse(normalized.ideas[0])
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject drops a malformed youtubeEvidence (missing searchPhrase/retrievedAt/supportingVideos) back to null', () => {
+  const raw = {
+    id: 'legacy-24',
+    research: {},
+    ideas: [{ id: 'idea-bad-evidence', title: 'Bad evidence', createdAt: '2024-01-01T00:00:00.000Z', youtubeEvidence: { seedTopic: 'x' } }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.equal(normalized.ideas[0].youtubeEvidence, null)
+})

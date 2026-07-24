@@ -42,6 +42,7 @@ function createBlankIdea(): Idea {
     notes: '',
     updatedAt: now,
     productionStage: 'idea',
+    youtubeEvidence: null,
   }
 }
 

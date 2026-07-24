@@ -154,3 +154,25 @@ export async function renderVideo(
 export function getAssetFileUrl(projectId: string, assetId: string): string {
   return `${API_BASE}/projects/${projectId}/assets/${assetId}/file`
 }
+
+export type OpportunityScoutConfig = {
+  seedTopic: string
+  regionCode: string
+  languageCode: string
+  publishedAfterDays: number
+  maxSearchPhrases: number
+  maxResultsPerPhrase: number
+}
+
+export type FindOpportunitiesResult = {
+  ideas: Idea[]
+  phrasesWithNoResults: string[]
+  phraseErrors: { phrase: string; error: string }[]
+}
+
+export function findOpportunities(projectId: string, config: OpportunityScoutConfig): Promise<FindOpportunitiesResult> {
+  return request(`/projects/${projectId}/research/opportunity-scout`, {
+    method: 'POST',
+    body: JSON.stringify(config),
+  })
+}

@@ -1,7 +1,43 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { IdeaSchema, IdeaSourceReferenceSchema } from '../../shared/schema/project.ts'
+import {
+  IdeaSchema,
+  IdeaSourceReferenceSchema,
+  YoutubeOpportunityEvidenceSchema,
+  type YoutubeOpportunityEvidence,
+} from '../../shared/schema/project.ts'
+
+function validYoutubeEvidence(): YoutubeOpportunityEvidence {
+  const now = new Date().toISOString()
+  return {
+    seedTopic: 'dwc lettuce',
+    searchPhrase: 'dwc lettuce for beginners',
+    regionCode: 'US',
+    languageCode: 'en',
+    publishedAfter: now,
+    totalResultsFound: 1200,
+    medianViewsPerDay: 42.5,
+    outlierVideoIds: ['v1'],
+    supportingVideos: [
+      {
+        videoId: 'v1',
+        url: 'https://www.youtube.com/watch?v=v1',
+        title: 'Easy DWC Lettuce Build',
+        description: 'A simple build for beginners.',
+        channelTitle: 'Grow Channel',
+        publishedAt: now,
+        viewCount: 10000,
+        likeCount: 500,
+        commentCount: 50,
+        viewsPerDay: 200,
+        engagementRate: 0.055,
+        retrievedAt: now,
+      },
+    ],
+    retrievedAt: now,
+  }
+}
 
 function validIdea() {
   const now = new Date().toISOString()
@@ -26,6 +62,7 @@ function validIdea() {
     notes: '',
     updatedAt: now,
     productionStage: 'idea',
+    youtubeEvidence: null,
   }
 }
 
@@ -79,6 +116,37 @@ test('IdeaSchema rejects an invalid productionStage value', () => {
   const idea = { ...validIdea(), productionStage: 'live' }
   const result = IdeaSchema.safeParse(idea)
   assert.equal(result.success, false)
+})
+
+test('IdeaSchema accepts a null youtubeEvidence', () => {
+  const result = IdeaSchema.safeParse({ ...validIdea(), youtubeEvidence: null })
+  assert.ok(result.success)
+})
+
+test('IdeaSchema accepts a fully-populated youtubeEvidence', () => {
+  const result = IdeaSchema.safeParse({ ...validIdea(), youtubeEvidence: validYoutubeEvidence() })
+  assert.ok(result.success)
+})
+
+test('IdeaSchema rejects an idea missing youtubeEvidence entirely', () => {
+  const idea = validIdea() as Record<string, unknown>
+  delete idea.youtubeEvidence
+  const result = IdeaSchema.safeParse(idea)
+  assert.equal(result.success, false)
+})
+
+test('YoutubeOpportunityEvidenceSchema rejects a supporting video missing required numeric fields', () => {
+  const evidence = validYoutubeEvidence()
+  evidence.supportingVideos = [{ ...evidence.supportingVideos[0], viewCount: 'not-a-number' as unknown as number }]
+  const result = YoutubeOpportunityEvidenceSchema.safeParse(evidence)
+  assert.equal(result.success, false)
+})
+
+test('YoutubeOpportunityEvidenceSchema accepts a null likeCount/commentCount/engagementRate (hidden by the uploader)', () => {
+  const evidence = validYoutubeEvidence()
+  evidence.supportingVideos = [{ ...evidence.supportingVideos[0], likeCount: null, commentCount: null, engagementRate: null }]
+  const result = YoutubeOpportunityEvidenceSchema.safeParse(evidence)
+  assert.ok(result.success)
 })
 
 test('IdeaSourceReferenceSchema accepts a reference with a real referencedId', () => {

@@ -309,6 +309,31 @@ button:disabled {
   vertical-align: middle;
 }
 
+.opportunity-scout {
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.opportunity-scout-config-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.opportunity-scout-config-row .field {
+  flex: 1;
+  min-width: 120px;
+}
+
+.opportunity-notes {
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--text-muted);
+  margin: 8px 0 0;
+}
+
 .editable-list {
   margin-bottom: 16px;
 }

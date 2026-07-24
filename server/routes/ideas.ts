@@ -81,6 +81,7 @@ ideasRouter.post('/projects/:id/ideas/generate', async (req, res) => {
     notes: idea.notes,
     updatedAt: now,
     productionStage: 'idea',
+    youtubeEvidence: null,
   }))
 
   res.json({ ideas: drafts })

@@ -77,6 +77,53 @@ function normalizePlainKeywordSet(value: unknown): unknown {
   }
 }
 
+// A single supporting video is only meaningful with its id, url, and the
+// numbers that back the finding — a partial entry is dropped from the array
+// rather than repaired, same reasoning as normalizeFactLock.
+function normalizeYoutubeVideoEvidence(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.videoId !== 'string' || typeof raw.url !== 'string') return null
+  if (typeof raw.viewCount !== 'number' || typeof raw.viewsPerDay !== 'number') return null
+  return {
+    videoId: raw.videoId,
+    url: raw.url,
+    title: typeof raw.title === 'string' ? raw.title : '',
+    description: typeof raw.description === 'string' ? raw.description : '',
+    channelTitle: typeof raw.channelTitle === 'string' ? raw.channelTitle : '',
+    publishedAt: typeof raw.publishedAt === 'string' ? raw.publishedAt : '',
+    viewCount: raw.viewCount,
+    likeCount: typeof raw.likeCount === 'number' ? raw.likeCount : null,
+    commentCount: typeof raw.commentCount === 'number' ? raw.commentCount : null,
+    viewsPerDay: raw.viewsPerDay,
+    engagementRate: typeof raw.engagementRate === 'number' ? raw.engagementRate : null,
+    retrievedAt: typeof raw.retrievedAt === 'string' ? raw.retrievedAt : '',
+  }
+}
+
+// The full evidence record is dropped to null (never partially repaired) if
+// it's missing what makes it trustworthy as a record of a real scout run —
+// same reasoning as normalizeEnrichmentRecipe: a half-valid evidence record
+// is worse than a clear "no evidence attached."
+function normalizeYoutubeOpportunityEvidence(raw: unknown): unknown {
+  if (!isRecord(raw)) return null
+  if (typeof raw.searchPhrase !== 'string' || typeof raw.retrievedAt !== 'string') return null
+  if (!Array.isArray(raw.supportingVideos)) return null
+  return {
+    seedTopic: typeof raw.seedTopic === 'string' ? raw.seedTopic : '',
+    searchPhrase: raw.searchPhrase,
+    regionCode: typeof raw.regionCode === 'string' ? raw.regionCode : '',
+    languageCode: typeof raw.languageCode === 'string' ? raw.languageCode : '',
+    publishedAfter: typeof raw.publishedAfter === 'string' ? raw.publishedAfter : '',
+    totalResultsFound: typeof raw.totalResultsFound === 'number' ? raw.totalResultsFound : 0,
+    medianViewsPerDay: typeof raw.medianViewsPerDay === 'number' ? raw.medianViewsPerDay : 0,
+    outlierVideoIds: Array.isArray(raw.outlierVideoIds) ? raw.outlierVideoIds.filter((v): v is string => typeof v === 'string') : [],
+    supportingVideos: raw.supportingVideos
+      .map(normalizeYoutubeVideoEvidence)
+      .filter((v): v is NonNullable<typeof v> => v !== null),
+    retrievedAt: raw.retrievedAt,
+  }
+}
+
 // Backfills any Phase 3 fields missing from an idea entry while leaving every
 // field already present — including the original Phase 0 fields — untouched.
 function normalizeIdea(raw: unknown): unknown {
@@ -109,6 +156,7 @@ function normalizeIdea(raw: unknown): unknown {
       typeof idea.productionStage === 'string' && VALID_PRODUCTION_STAGES.has(idea.productionStage)
         ? idea.productionStage
         : 'idea',
+    youtubeEvidence: normalizeYoutubeOpportunityEvidence(idea.youtubeEvidence),
   }
 }
 

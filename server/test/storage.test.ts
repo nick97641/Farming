@@ -83,6 +83,7 @@ test('a selected approved idea and its designBrief persist unchanged through sav
     notes: '',
     updatedAt: now,
     productionStage: 'idea',
+    youtubeEvidence: null,
   }
 
   await writeProject({

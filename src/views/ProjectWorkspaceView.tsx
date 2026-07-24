@@ -5,6 +5,7 @@ import {
   deleteImageJob as apiDeleteImageJob,
   deleteProject,
   deleteReferencePhoto as apiDeleteReferencePhoto,
+  findOpportunities as apiFindOpportunities,
   generateContent as apiGenerateContent,
   generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
@@ -16,6 +17,7 @@ import {
   renderVideo as apiRenderVideo,
   saveProject,
   type ContentGenerationTarget,
+  type OpportunityScoutConfig,
 } from '../lib/api'
 import { duplicateImageJob } from '../lib/imageJobOptions'
 import { ContentTab } from './workspace/ContentTab'
@@ -75,6 +77,11 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [exportPdfError, setExportPdfError] = useState<string | null>(null)
   const [renderingVideo, setRenderingVideo] = useState(false)
   const [renderVideoError, setRenderVideoError] = useState<string | null>(null)
+  const [findingOpportunities, setFindingOpportunities] = useState(false)
+  const [findOpportunitiesError, setFindOpportunitiesError] = useState<string | null>(null)
+  const [pendingOpportunities, setPendingOpportunities] = useState<Idea[]>([])
+  const [opportunityPhrasesWithNoResults, setOpportunityPhrasesWithNoResults] = useState<string[]>([])
+  const [opportunityPhraseErrors, setOpportunityPhraseErrors] = useState<{ phrase: string; error: string }[]>([])
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
   const cancelGenerateRef = useRef(false)
@@ -94,6 +101,10 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setGenerateContentError(null)
     setExportPdfError(null)
     setRenderVideoError(null)
+    setFindOpportunitiesError(null)
+    setPendingOpportunities([])
+    setOpportunityPhrasesWithNoResults([])
+    setOpportunityPhraseErrors([])
 
     getProject(projectId)
       .then(setProject)
@@ -259,6 +270,52 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     } finally {
       setRenderingVideo(false)
     }
+  }
+
+  async function handleFindOpportunities(config: OpportunityScoutConfig) {
+    if (!project) return
+    setFindingOpportunities(true)
+    setFindOpportunitiesError(null)
+    try {
+      // Same reasoning as handleGenerateIdeas/handleGenerateContent: the
+      // route reads the project server-side, so flush pending edits first.
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      await saveProject(project)
+      setSaveState('saved')
+
+      const result = await apiFindOpportunities(project.id, config)
+      setPendingOpportunities(result.ideas)
+      setOpportunityPhrasesWithNoResults(result.phrasesWithNoResults)
+      setOpportunityPhraseErrors(result.phraseErrors)
+    } catch (err) {
+      setFindOpportunitiesError(err instanceof Error ? err.message : 'Failed to find opportunities')
+    } finally {
+      setFindingOpportunities(false)
+    }
+  }
+
+  // Accepting/discarding a scout draft never calls the server directly —
+  // exactly like accepting/discarding an AI-generated idea draft, it only
+  // ever mutates local state, and the normal autosave effect persists the
+  // result. Nothing here is added to project.ideas until the user acts.
+  function handleAcceptOpportunity(idea: Idea) {
+    updateProject((current) => ({ ...current, ideas: [...current.ideas, idea] }))
+    setPendingOpportunities((current) => current.filter((item) => item.id !== idea.id))
+  }
+
+  function handleAcceptAllOpportunities() {
+    updateProject((current) => ({ ...current, ideas: [...current.ideas, ...pendingOpportunities] }))
+    setPendingOpportunities([])
+  }
+
+  function handleDiscardOpportunity(ideaId: string) {
+    setPendingOpportunities((current) => current.filter((item) => item.id !== ideaId))
+  }
+
+  function handleDiscardAllOpportunities() {
+    setPendingOpportunities([])
+    setOpportunityPhrasesWithNoResults([])
+    setOpportunityPhraseErrors([])
   }
 
   async function handleImportImageJobFile(jobId: string, file: File) {
@@ -465,6 +522,16 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onOrganize={handleOrganize}
             organizing={organizing}
             organizeError={organizeError}
+            onFindOpportunities={handleFindOpportunities}
+            findingOpportunities={findingOpportunities}
+            findOpportunitiesError={findOpportunitiesError}
+            pendingOpportunities={pendingOpportunities}
+            opportunityPhrasesWithNoResults={opportunityPhrasesWithNoResults}
+            opportunityPhraseErrors={opportunityPhraseErrors}
+            onAcceptOpportunity={handleAcceptOpportunity}
+            onAcceptAllOpportunities={handleAcceptAllOpportunities}
+            onDiscardOpportunity={handleDiscardOpportunity}
+            onDiscardAllOpportunities={handleDiscardAllOpportunities}
           />
         )}
         {activeTab === 'ideas' && (
