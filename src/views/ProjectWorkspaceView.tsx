@@ -545,6 +545,15 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             topic={project.topic}
             onChangeTitle={(title) => updateProject((current) => ({ ...current, title }))}
             onChangeTopic={(topic) => updateProject((current) => ({ ...current, topic }))}
+            projectId={project.id}
+            ideas={project.ideas}
+            selectedIdeaId={project.selectedIdeaId}
+            designBrief={project.designBrief}
+            youtubeScript={project.content.longFormScript}
+            pdfDraft={project.content.pdfDraft}
+            imageJobs={project.imageJobs}
+            selectedImageJobId={project.selectedImageJobId}
+            onNavigate={(tab) => setActiveTab(tab)}
           />
         )}
         {activeTab === 'research' && (
