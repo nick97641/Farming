@@ -4,7 +4,7 @@ import type { DesignBrief, Idea, ImageJob } from '../../../shared/schema/project
 import { getModelProfile } from '../../../shared/modelProfiles'
 import { getImageJobFileUrl } from '../../lib/api'
 import { PRODUCTION_STAGE_LABELS, STATUS_LABELS } from '../../lib/ideaOptions'
-import { getDesignBriefReadiness, getTextReadiness } from '../../lib/productionSummary'
+import { getDesignBriefReadiness, getTextReadiness, hasPublicationInfo, isSafeWebUrl } from '../../lib/productionSummary'
 
 type SummaryTabId = 'ideas' | 'brief' | 'images' | 'content'
 
@@ -92,6 +92,36 @@ export function OverviewTab({
             ) : (
               <p className="empty-hint">No idea selected for production yet.</p>
             )}
+            {selectedIdea && hasPublicationInfo(selectedIdea.publication) && (
+              <>
+                {selectedIdea.publication.platform.trim() && (
+                  <p className="field-hint">Platform/channel: {selectedIdea.publication.platform}</p>
+                )}
+                {selectedIdea.publication.publishedAt.trim() && (
+                  <p className="field-hint">Published: {selectedIdea.publication.publishedAt}</p>
+                )}
+                {selectedIdea.publication.url.trim() && (
+                  <p className="field-hint">
+                    URL:{' '}
+                    {isSafeWebUrl(selectedIdea.publication.url) ? (
+                      <a href={selectedIdea.publication.url} target="_blank" rel="noreferrer noopener">
+                        {selectedIdea.publication.url}
+                      </a>
+                    ) : (
+                      selectedIdea.publication.url
+                    )}
+                  </p>
+                )}
+                {selectedIdea.publication.notes.trim() && (
+                  <p className="field-hint">Notes: {selectedIdea.publication.notes}</p>
+                )}
+              </>
+            )}
+            {selectedIdea &&
+              !hasPublicationInfo(selectedIdea.publication) &&
+              selectedIdea.productionStage === 'published' && (
+                <p className="empty-hint">Published — no publication details recorded.</p>
+              )}
           </div>
           <div className="idea-card-actions">
             <button type="button" onClick={() => onNavigate('ideas')}>
