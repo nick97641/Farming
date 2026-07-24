@@ -11,6 +11,7 @@ import { getImageJobFileUrl } from '../../lib/api'
 import { applyDestination, STATUS_OPTIONS } from '../../lib/imageJobOptions'
 import { detectConflicts, enrichImageRequest, runFactualityGate } from '../../../shared/imageEnrichment'
 import { DESTINATION_PRESETS, validateCustomDimensions } from '../../../shared/destinationPresets'
+import { getImageQualityPresetsForFamily } from '../../../shared/imageQualityPresets'
 import { DRAW_THINGS_SAMPLERS, DRAW_THINGS_SCHEDULERS, getModelProfile, MODEL_PROFILES } from '../../../shared/modelProfiles'
 import { influenceToWeight, roleToControlType } from '../../../shared/referenceGuidance'
 import { ReferencePhotoManager } from './ReferencePhotoManager'
@@ -82,6 +83,7 @@ export function ImageJobEditor({
   const stale = job.sourceDesignBriefUpdatedAt !== null && job.sourceDesignBriefUpdatedAt !== designBrief?.updatedAt
   const immutable = job.status === 'completed' || job.output !== null
   const modelProfile = getModelProfile(job.modelProfileId)
+  const qualityPresets = getImageQualityPresetsForFamily(modelProfile.family)
 
   function patch(fields: Partial<ImageJob>) {
     if (immutable) return
@@ -605,6 +607,37 @@ export function ImageJobEditor({
             <p className="field-hint">
               Target export size: {job.destination.exportWidth}×{job.destination.exportHeight}
             </p>
+          )}
+          {qualityPresets.length > 0 && (
+            <>
+              <label className="field">
+                Quality preset
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const preset = qualityPresets.find((candidate) => candidate.id === event.target.value)
+                    if (!preset) return
+                    patchAdvanced({
+                      sampler: preset.sampler,
+                      steps: preset.steps,
+                      guidanceScale: preset.guidanceScale,
+                      clipSkip: preset.clipSkip,
+                    })
+                  }}
+                >
+                  <option value="">Apply a tested preset...</option>
+                  {qualityPresets.map((preset) => (
+                    <option key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <p className="field-hint">
+                Sets sampler, steps, guidance, and CLIP skip below. Dimensions and seed are never changed by a preset
+                — seed stays random unless you set it to fixed yourself.
+              </p>
+            </>
           )}
           <label className="field">
             Sampler

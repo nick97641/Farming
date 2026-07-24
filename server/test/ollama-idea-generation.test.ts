@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildGenerateIdeasPrompt, GenerateIdeasResponseSchema, GeneratedIdeaSchema } from '../lib/ollama-client.ts'
+import { buildGenerateIdeasPrompt, GenerateIdeasResponseSchema, GeneratedIdeaSchema, IDEA_SYSTEM_PROMPT } from '../lib/ollama-client.ts'
 import { createEmptyProject } from '../../shared/schema/project.ts'
 
 function sampleResearch() {
@@ -85,5 +85,30 @@ test('GenerateIdeasResponseSchema rejects a malformed response missing the ideas
 
 test('GenerateIdeasResponseSchema accepts an empty ideas array', () => {
   const result = GenerateIdeasResponseSchema.safeParse({ ideas: [] })
+  assert.ok(result.success)
+})
+
+test('IDEA_SYSTEM_PROMPT instructs the model to never invent a basedOn citation', () => {
+  assert.ok(IDEA_SYSTEM_PROMPT.includes('never a citation to something not present in the supplied research'))
+})
+
+test('IDEA_SYSTEM_PROMPT instructs the model to leave basedOn empty and lower confidence when research is insufficient, rather than fabricating a citation', () => {
+  assert.ok(IDEA_SYSTEM_PROMPT.includes('do not invent a citation to fill "basedOn"'))
+  assert.ok(IDEA_SYSTEM_PROMPT.includes('leave it as an empty array and set "confidence" to "low"'))
+})
+
+test('GeneratedIdeaSchema accepts an idea with low confidence and an empty basedOn (insufficient research, honestly reported)', () => {
+  const result = GeneratedIdeaSchema.safeParse({
+    title: 'Speculative DWC Lettuce Idea',
+    summary: 'An idea with no direct research backing.',
+    contentType: 'other',
+    targetAudience: 'Unknown',
+    problemSolved: 'Unclear',
+    proposedOutcome: 'Unclear',
+    differentiator: 'Unclear',
+    confidence: 'low',
+    notes: 'Not directly supported by the given research.',
+    basedOn: [],
+  })
   assert.ok(result.success)
 })
