@@ -6,7 +6,7 @@ import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
-import type { Idea } from '../../shared/schema/project.ts'
+import { createDefaultIdeaPublicationInfo, type Idea } from '../../shared/schema/project.ts'
 
 let dataDir: string
 
@@ -44,6 +44,7 @@ function blankIdea(overrides: Partial<Idea> = {}): Idea {
     updatedAt: now,
     productionStage: 'idea',
     youtubeEvidence: null,
+    publication: createDefaultIdeaPublicationInfo(),
     ...overrides,
   }
 }
@@ -174,4 +175,28 @@ test('idea production stage persists through idea, draft, created, and published
     const reloaded = await readProject(projectId)
     assert.equal(reloaded.ideas[0].productionStage, productionStage)
   }
+})
+
+test('a populated publication record persists across reload and survives an unrelated production stage change', async () => {
+  const projectId = 'idea-publication-persist'
+  const project = await createProject({ id: projectId, title: 'Test', topic: 'hydroponics' })
+  const publication = {
+    url: 'https://www.youtube.com/watch?v=abc123',
+    publishedAt: '2024-03-15',
+    platform: 'YouTube',
+    notes: 'Went live as part of the spring basil series.',
+  }
+  await writeProject({ ...project, ideas: [blankIdea({ productionStage: 'published', publication })] })
+
+  let reloaded = await readProject(projectId)
+  assert.deepEqual(reloaded.ideas[0].publication, publication)
+
+  // Changing production stage (in either direction) must never touch it.
+  await writeProject({
+    ...reloaded,
+    ideas: reloaded.ideas.map((idea) => ({ ...idea, productionStage: 'draft', updatedAt: new Date().toISOString() })),
+  })
+  reloaded = await readProject(projectId)
+  assert.equal(reloaded.ideas[0].productionStage, 'draft')
+  assert.deepEqual(reloaded.ideas[0].publication, publication)
 })

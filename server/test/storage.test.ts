@@ -8,7 +8,12 @@ import { createProject, readProject, writeProject } from '../lib/storage.ts'
 import { getGeneratedImagesDir, getImportedImagesDir } from '../lib/paths.ts'
 import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../shared/imageEnrichment.ts'
 import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
-import { createDefaultAdvancedSettings, type Idea, type ImageJob } from '../../shared/schema/project.ts'
+import {
+  createDefaultAdvancedSettings,
+  createDefaultIdeaPublicationInfo,
+  type Idea,
+  type ImageJob,
+} from '../../shared/schema/project.ts'
 
 let dataDir: string
 
@@ -84,6 +89,7 @@ test('a selected approved idea and its designBrief persist unchanged through sav
     updatedAt: now,
     productionStage: 'idea',
     youtubeEvidence: null,
+    publication: createDefaultIdeaPublicationInfo(),
   }
 
   await writeProject({

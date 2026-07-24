@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react'
 
-import type { Confidence, Idea, IdeaContentType, IdeaStatus, ProductionStage, Research } from '../../../shared/schema/project'
-import { CONTENT_TYPE_OPTIONS, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
+import {
+  createDefaultIdeaPublicationInfo,
+  type Confidence,
+  type Idea,
+  type IdeaContentType,
+  type IdeaStatus,
+  type ProductionStage,
+  type Research,
+} from '../../../shared/schema/project'
+import { CONTENT_TYPE_OPTIONS, duplicateIdea, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
 import { GeneratedIdeaReview } from './GeneratedIdeaReview'
 import { IdeaCard } from './IdeaCard'
 import { IdeaEditor } from './IdeaEditor'
@@ -43,6 +51,7 @@ function createBlankIdea(): Idea {
     updatedAt: now,
     productionStage: 'idea',
     youtubeEvidence: null,
+    publication: createDefaultIdeaPublicationInfo(),
   }
 }
 
@@ -106,15 +115,7 @@ export function IdeasTab({
   }
 
   function handleDuplicateIdea(idea: Idea) {
-    const now = new Date().toISOString()
-    const copy: Idea = {
-      ...idea,
-      id: crypto.randomUUID(),
-      title: idea.title ? `${idea.title} (Copy)` : 'Untitled idea (Copy)',
-      createdAt: now,
-      updatedAt: now,
-    }
-    onChangeIdeas([...ideas, copy])
+    onChangeIdeas([...ideas, duplicateIdea(idea)])
   }
 
   function handleAcceptDraft(draft: Idea) {

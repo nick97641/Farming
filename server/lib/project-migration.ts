@@ -22,6 +22,7 @@ import {
   ImageSeedModeSchema,
   isImageJobSelectable,
   ProductionStageSchema,
+  type IdeaPublicationInfo,
 } from '../../shared/schema/project.ts'
 
 type PlainRecord = Record<string, unknown>
@@ -125,6 +126,20 @@ function normalizeYoutubeOpportunityEvidence(raw: unknown): unknown {
   }
 }
 
+// Backfilled per-field, never dropped wholesale — a manually-entered
+// publication record is free-text metadata like `notes`, not a verified
+// evidence blob like youtubeEvidence, so a malformed single field is simply
+// reset to '' rather than discarding the whole record.
+function normalizeIdeaPublicationInfo(raw: unknown): IdeaPublicationInfo {
+  const source = isRecord(raw) ? raw : {}
+  return {
+    url: typeof source.url === 'string' ? source.url : '',
+    publishedAt: typeof source.publishedAt === 'string' ? source.publishedAt : '',
+    platform: typeof source.platform === 'string' ? source.platform : '',
+    notes: typeof source.notes === 'string' ? source.notes : '',
+  }
+}
+
 // Backfills any Phase 3 fields missing from an idea entry while leaving every
 // field already present — including the original Phase 0 fields — untouched.
 function normalizeIdea(raw: unknown): unknown {
@@ -158,6 +173,7 @@ function normalizeIdea(raw: unknown): unknown {
         ? idea.productionStage
         : 'idea',
     youtubeEvidence: normalizeYoutubeOpportunityEvidence(idea.youtubeEvidence),
+    publication: normalizeIdeaPublicationInfo(idea.publication),
   }
 }
 

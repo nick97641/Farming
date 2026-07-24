@@ -15,7 +15,12 @@ import {
   searchVideos,
   YoutubeApiError,
 } from '../lib/youtube-client.ts'
-import type { Idea, YoutubeOpportunityEvidence, YoutubeVideoEvidence } from '../../shared/schema/project.ts'
+import {
+  createDefaultIdeaPublicationInfo,
+  type Idea,
+  type YoutubeOpportunityEvidence,
+  type YoutubeVideoEvidence,
+} from '../../shared/schema/project.ts'
 
 export const opportunityScoutRouter = Router()
 
@@ -261,6 +266,7 @@ opportunityScoutRouter.post('/projects/:id/research/opportunity-scout', async (r
       updatedAt: nowIso,
       productionStage: 'idea',
       youtubeEvidence: evidence,
+      publication: createDefaultIdeaPublicationInfo(),
     }
   })
 

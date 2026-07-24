@@ -336,6 +336,7 @@ test('opportunity-scout computes correct deterministic metrics and returns one I
       assert.ok(idea.notes.includes('Alt title'))
       assert.ok(idea.notes.includes('Secondary hook'))
       assert.ok(idea.notes.includes('SEO description for dwc lettuce for beginners'))
+      assert.deepEqual(idea.publication, { url: '', publishedAt: '', platform: '', notes: '' })
 
       const evidence = idea.youtubeEvidence
       assert.ok(evidence)

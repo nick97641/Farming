@@ -2,6 +2,8 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
+  createDefaultIdeaPublicationInfo,
+  IdeaPublicationInfoSchema,
   IdeaSchema,
   IdeaSourceReferenceSchema,
   YoutubeOpportunityEvidenceSchema,
@@ -63,6 +65,7 @@ function validIdea() {
     updatedAt: now,
     productionStage: 'idea',
     youtubeEvidence: null,
+    publication: createDefaultIdeaPublicationInfo(),
   }
 }
 
@@ -131,6 +134,41 @@ test('IdeaSchema accepts a fully-populated youtubeEvidence', () => {
 test('IdeaSchema rejects an idea missing youtubeEvidence entirely', () => {
   const idea = validIdea() as Record<string, unknown>
   delete idea.youtubeEvidence
+  const result = IdeaSchema.safeParse(idea)
+  assert.equal(result.success, false)
+})
+
+test('createDefaultIdeaPublicationInfo returns all-empty-string fields', () => {
+  assert.deepEqual(createDefaultIdeaPublicationInfo(), { url: '', publishedAt: '', platform: '', notes: '' })
+})
+
+test('IdeaPublicationInfoSchema accepts the all-empty default', () => {
+  assert.ok(IdeaPublicationInfoSchema.safeParse(createDefaultIdeaPublicationInfo()).success)
+})
+
+test('IdeaPublicationInfoSchema accepts a fully-populated record, including a free-text (non-ISO) publishedAt', () => {
+  const result = IdeaPublicationInfoSchema.safeParse({
+    url: 'https://www.youtube.com/watch?v=abc123',
+    publishedAt: 'sometime in March',
+    platform: 'YouTube',
+    notes: 'Published as part of the spring basil series.',
+  })
+  assert.ok(result.success)
+})
+
+test('IdeaPublicationInfoSchema rejects a non-string field', () => {
+  const result = IdeaPublicationInfoSchema.safeParse({ url: 123, publishedAt: '', platform: '', notes: '' })
+  assert.equal(result.success, false)
+})
+
+test('IdeaSchema accepts an idea with the default (all-empty) publication record', () => {
+  const result = IdeaSchema.safeParse({ ...validIdea(), publication: createDefaultIdeaPublicationInfo() })
+  assert.ok(result.success)
+})
+
+test('IdeaSchema rejects an idea missing publication entirely', () => {
+  const idea = validIdea() as Record<string, unknown>
+  delete idea.publication
   const result = IdeaSchema.safeParse(idea)
   assert.equal(result.success, false)
 })

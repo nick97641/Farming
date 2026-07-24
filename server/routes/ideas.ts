@@ -5,7 +5,7 @@ import { z } from 'zod'
 
 import { OllamaIdeaGenerationError, generateIdeas } from '../lib/ollama-client.ts'
 import { ProjectDataCorruptError, ProjectNotFoundError, readProject } from '../lib/storage.ts'
-import type { Idea } from '../../shared/schema/project.ts'
+import { createDefaultIdeaPublicationInfo, type Idea } from '../../shared/schema/project.ts'
 
 export const ideasRouter = Router()
 
@@ -82,6 +82,7 @@ ideasRouter.post('/projects/:id/ideas/generate', async (req, res) => {
     updatedAt: now,
     productionStage: 'idea',
     youtubeEvidence: null,
+    publication: createDefaultIdeaPublicationInfo(),
   }))
 
   res.json({ ideas: drafts })

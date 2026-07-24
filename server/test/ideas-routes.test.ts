@@ -95,6 +95,7 @@ test('ideas/generate returns reviewable drafts without saving them automatically
     assert.equal(body.ideas[0].productionStage, 'idea')
     assert.equal(body.ideas[0].status, 'draft')
     assert.equal(body.ideas[0].sourceResearch[0].kind, 'aiCitation')
+    assert.deepEqual(body.ideas[0].publication, { url: '', publishedAt: '', platform: '', notes: '' })
 
     const reloaded = await readProject(project.id)
     assert.deepEqual(reloaded.ideas, [], 'generated drafts must remain unsaved until the user accepts them')

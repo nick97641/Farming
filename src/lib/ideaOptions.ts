@@ -1,4 +1,4 @@
-import type { IdeaContentType, IdeaStatus, ProductionStage } from '../../shared/schema/project'
+import { createDefaultIdeaPublicationInfo, type Idea, type IdeaContentType, type IdeaStatus, type ProductionStage } from '../../shared/schema/project'
 
 export const CONTENT_TYPE_OPTIONS: { value: IdeaContentType; label: string }[] = [
   { value: 'youtube-video', label: 'YouTube video' },
@@ -39,3 +39,21 @@ export const PRODUCTION_STAGE_OPTIONS: { value: ProductionStage; label: string }
 export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = Object.fromEntries(
   PRODUCTION_STAGE_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<ProductionStage, string>
+
+// Pulled out as a pure function (same reasoning as duplicateImageJob in
+// imageJobOptions.ts) so "a duplicate never carries over the source's
+// publication record" is independently testable without a React test setup.
+// A publication record belongs to the specific idea that was actually
+// published — the copy has never itself been published, regardless of what
+// the source's productionStage or publication fields say.
+export function duplicateIdea(idea: Idea, overrides?: { id?: string; now?: string }): Idea {
+  const now = overrides?.now ?? new Date().toISOString()
+  return {
+    ...idea,
+    id: overrides?.id ?? crypto.randomUUID(),
+    title: idea.title ? `${idea.title} (Copy)` : 'Untitled idea (Copy)',
+    createdAt: now,
+    updatedAt: now,
+    publication: createDefaultIdeaPublicationInfo(),
+  }
+}

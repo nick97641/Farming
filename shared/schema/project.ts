@@ -205,6 +205,29 @@ export const YoutubeOpportunityEvidenceSchema = z.object({
 })
 export type YoutubeOpportunityEvidence = z.infer<typeof YoutubeOpportunityEvidenceSchema>
 
+// Manually-managed publication record — never fetched, uploaded, scheduled,
+// or verified by this app. All four fields are permissive free-text strings
+// (never a stricter date/URL type) so migration can always backfill safely
+// and a user's own notation (e.g. "sometime in March") is never rejected.
+// Independent of productionStage: reaching "published" never requires or
+// auto-fills this, and changing stage — in either direction — never clears
+// or touches it.
+export const IdeaPublicationInfoSchema = z.object({
+  url: z.string(),
+  publishedAt: z.string(),
+  platform: z.string(),
+  notes: z.string(),
+})
+export type IdeaPublicationInfo = z.infer<typeof IdeaPublicationInfoSchema>
+
+// Single source of truth for "nothing recorded yet" — used by every idea
+// construction site (manual create, AI-generated draft, Opportunity Scout
+// draft) and by duplication, which resets to this rather than carrying over
+// the source idea's own publication record.
+export function createDefaultIdeaPublicationInfo(): IdeaPublicationInfo {
+  return { url: '', publishedAt: '', platform: '', notes: '' }
+}
+
 export const IdeaSchema = z.object({
   // Original Phase 0 fields, unchanged and still required — preserved as-is
   // for backward compatibility even though the Phase 3 UI doesn't populate
@@ -235,6 +258,7 @@ export const IdeaSchema = z.object({
   // finding — see YoutubeOpportunityEvidenceSchema above. Never set or
   // changed by any code path other than accepting a scout draft.
   youtubeEvidence: YoutubeOpportunityEvidenceSchema.nullable(),
+  publication: IdeaPublicationInfoSchema,
 })
 export type Idea = z.infer<typeof IdeaSchema>
 

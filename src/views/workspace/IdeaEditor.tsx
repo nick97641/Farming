@@ -1,4 +1,4 @@
-import type { Confidence, Idea, Research } from '../../../shared/schema/project'
+import type { Confidence, Idea, IdeaPublicationInfo, Research } from '../../../shared/schema/project'
 import { CONTENT_TYPE_OPTIONS, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
 import { isReferenceAvailable } from '../../lib/researchReferences'
 import { ResearchPicker } from './ResearchPicker'
@@ -16,6 +16,10 @@ const CONFIDENCE_OPTIONS: Confidence[] = ['high', 'medium', 'low']
 export function IdeaEditor({ idea, research, onChange, onClose, onDelete }: Props) {
   function patch(fields: Partial<Idea>) {
     onChange({ ...idea, ...fields, updatedAt: new Date().toISOString() })
+  }
+
+  function patchPublication(fields: Partial<IdeaPublicationInfo>) {
+    patch({ publication: { ...idea.publication, ...fields } })
   }
 
   function handlePrefill() {
@@ -184,6 +188,45 @@ export function IdeaEditor({ idea, research, onChange, onClose, onDelete }: Prop
         <label className="field">
           Notes
           <textarea rows={4} value={idea.notes} onChange={(event) => patch({ notes: event.target.value })} />
+        </label>
+      </section>
+
+      <section className="idea-editor-group">
+        <h3>Publication</h3>
+        <p className="tab-explanation">
+          Optional — record where and when this was actually published. Purely manual: nothing here is fetched,
+          uploaded, or verified, and it is never affected by changes to Production stage above.
+        </p>
+        <label className="field">
+          Publication URL
+          <input
+            type="url"
+            value={idea.publication.url}
+            onChange={(event) => patchPublication({ url: event.target.value })}
+          />
+        </label>
+        <label className="field">
+          Publication date
+          <input
+            type="date"
+            value={idea.publication.publishedAt}
+            onChange={(event) => patchPublication({ publishedAt: event.target.value })}
+          />
+        </label>
+        <label className="field">
+          Platform/channel
+          <input
+            value={idea.publication.platform}
+            onChange={(event) => patchPublication({ platform: event.target.value })}
+          />
+        </label>
+        <label className="field">
+          Publication notes
+          <textarea
+            rows={3}
+            value={idea.publication.notes}
+            onChange={(event) => patchPublication({ notes: event.target.value })}
+          />
         </label>
       </section>
     </div>

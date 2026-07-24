@@ -106,6 +106,7 @@ test('normalizeLegacyProject backfills Phase 3 idea fields while preserving orig
   assert.equal(idea.confidence, 'low')
   assert.equal(idea.updatedAt, '2024-01-01T00:00:00.000Z')
   assert.equal(idea.productionStage, 'idea')
+  assert.deepEqual(idea.publication, { url: '', publishedAt: '', platform: '', notes: '' })
 
   const validated = ProjectSchema.shape.ideas.element.safeParse(idea)
   assert.ok(validated.success)
@@ -784,4 +785,82 @@ test('normalizeLegacyProject drops a malformed youtubeEvidence (missing searchPh
   }
   const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
   assert.equal(normalized.ideas[0].youtubeEvidence, null)
+})
+
+test('normalizeLegacyProject backfills publication to the all-empty default on an idea missing the field entirely', () => {
+  const raw = {
+    id: 'legacy-25',
+    research: {},
+    ideas: [{ id: 'idea-pre-publication', title: 'Pre-publication-tracking idea', createdAt: '2024-01-01T00:00:00.000Z' }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.deepEqual(normalized.ideas[0].publication, { url: '', publishedAt: '', platform: '', notes: '' })
+
+  const validated = ProjectSchema.shape.ideas.element.safeParse(normalized.ideas[0])
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject preserves a structurally valid, fully-populated publication record unchanged', () => {
+  const raw = {
+    id: 'legacy-26',
+    research: {},
+    ideas: [
+      {
+        id: 'idea-published',
+        title: 'Published idea',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        publication: {
+          url: 'https://www.youtube.com/watch?v=abc123',
+          publishedAt: '2024-03-15',
+          platform: 'YouTube',
+          notes: 'Went live as part of the spring series.',
+        },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.deepEqual(normalized.ideas[0].publication, {
+    url: 'https://www.youtube.com/watch?v=abc123',
+    publishedAt: '2024-03-15',
+    platform: 'YouTube',
+    notes: 'Went live as part of the spring series.',
+  })
+
+  const validated = ProjectSchema.shape.ideas.element.safeParse(normalized.ideas[0])
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject repairs a publication record with a non-string field back to an empty string for that field only', () => {
+  const raw = {
+    id: 'legacy-27',
+    research: {},
+    ideas: [
+      {
+        id: 'idea-malformed-publication',
+        title: 'Idea with a malformed publication field',
+        createdAt: '2024-01-01T00:00:00.000Z',
+        publication: { url: 12345, publishedAt: '2024-03-15', platform: 'YouTube', notes: 'Real notes' },
+      },
+    ],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.deepEqual(normalized.ideas[0].publication, {
+    url: '',
+    publishedAt: '2024-03-15',
+    platform: 'YouTube',
+    notes: 'Real notes',
+  })
+
+  const validated = ProjectSchema.shape.ideas.element.safeParse(normalized.ideas[0])
+  assert.ok(validated.success)
+})
+
+test('normalizeLegacyProject defaults publication to the all-empty default when the stored value is not an object at all', () => {
+  const raw = {
+    id: 'legacy-28',
+    research: {},
+    ideas: [{ id: 'idea-bad-publication-shape', title: 'Bad publication shape', createdAt: '2024-01-01T00:00:00.000Z', publication: 'not an object' }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
+  assert.deepEqual(normalized.ideas[0].publication, { url: '', publishedAt: '', platform: '', notes: '' })
 })
