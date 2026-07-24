@@ -270,6 +270,7 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
         guidanceScale: job.advancedSettings.guidanceScale,
         seed: resolvedSeed,
         sampler: job.advancedSettings.sampler,
+        clipSkip: job.advancedSettings.clipSkip,
         controls,
       })
     } catch (error) {

@@ -54,6 +54,14 @@ test('buildDrawThingsPayload includes sampler_name only when explicitly supplied
   assert.equal(withReal.sampler_name, 'Euler a')
 })
 
+test('buildDrawThingsPayload includes clip_skip only when explicitly supplied', () => {
+  const withoutIt = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024 })
+  assert.equal('clip_skip' in withoutIt, false)
+
+  const withIt = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024, clipSkip: 2 })
+  assert.equal(withIt.clip_skip, 2)
+})
+
 test('buildDrawThingsPayload never includes a scheduler key — Draw Things rejects that field outright regardless of value', () => {
   const payload = buildDrawThingsPayload({ prompt: 'a', negativePrompt: '', width: 1024, height: 1024, sampler: 'DPM++ 2M Karras' })
   assert.equal('scheduler' in payload, false)

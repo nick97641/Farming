@@ -781,10 +781,10 @@ export function ImageJobEditor({
             Tiled diffusion
           </label>
           <p className="field-hint">
-            Sampler/steps/guidance/seed are sent to Draw Things (scheduler is recorded but never sent — see above).
-            CLIP skip, shift, refiner, upscaler, high-res fix, face restoration, sharpness, and tiled
-            decoding/diffusion are recorded for reproducibility but not yet forwarded — their Draw Things wire format
-            hasn&apos;t been verified against a live instance.
+            Sampler/steps/guidance/seed/CLIP skip are sent to Draw Things (scheduler is recorded but never sent — see
+            above). Shift, refiner, upscaler, high-res fix, face restoration, sharpness, and tiled decoding/diffusion
+            are recorded for reproducibility but not yet forwarded — their Draw Things wire format hasn&apos;t been
+            verified against a live instance.
           </p>
 
           {job.references.length > 0 && (

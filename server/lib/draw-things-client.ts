@@ -40,12 +40,13 @@ export type DrawThingsGenerationInput = {
   // Must already be one of DRAW_THINGS_SAMPLERS (shared/modelProfiles.ts) —
   // callers validate this before reaching here (see the generate route).
   sampler?: string
+  clipSkip?: number
   controls?: DrawThingsControlInput[]
 }
 
 // Only prompt/negative_prompt/width/height/steps/guidance_scale/seed/
-// sampler_name/controlnet are sent — this is the boundary of what this
-// checkpoint has reasonable confidence about, following Draw Things'
+// sampler_name/clip_skip/controlnet are sent — this is the boundary of what
+// this checkpoint has reasonable confidence about, following Draw Things'
 // existing A1111-compatible /sdapi/v1/txt2img surface and the commonly-used
 // alwayson_scripts.controlnet convention for ControlNet-style guidance.
 // There is deliberately no `scheduler` field: confirmed directly against the
@@ -53,12 +54,14 @@ export type DrawThingsGenerationInput = {
 // "scheduler" key outright ("Unrecognized keys: [\"scheduler\"]") regardless
 // of value — scheduling is selected as part of sampler_name itself (e.g. the
 // "Karras"/"Trailing"/"AYS" suffixed entries in DRAW_THINGS_SAMPLERS).
-// CLIP skip, shift, refiner, upscaler, hi-res fix, face restoration,
-// sharpness, and tiled decoding/diffusion are intentionally NOT sent here —
-// they are captured in ImageAdvancedSettings for a complete, reproducible
-// recipe, but their real Draw Things wire format hasn't been verified against
-// a live instance, so guessing one risks code that looks wired but silently
-// does nothing (or errors). Adjust this function once verified.
+// clip_skip was confirmed the same way: the installed Draw Things API
+// accepts it and returns an image. Shift, refiner, upscaler, hi-res fix, face
+// restoration, sharpness, and tiled decoding/diffusion are still intentionally
+// NOT sent here — they are captured in ImageAdvancedSettings for a complete,
+// reproducible recipe, but their real Draw Things wire format hasn't been
+// verified against a live instance, so guessing one risks code that looks
+// wired but silently does nothing (or errors). Adjust this function once
+// each is verified.
 export function buildDrawThingsPayload(input: DrawThingsGenerationInput) {
   const payload: Record<string, unknown> = {
     prompt: input.prompt.trim(),
@@ -72,6 +75,7 @@ export function buildDrawThingsPayload(input: DrawThingsGenerationInput) {
     batch_size: 1,
   }
   if (input.sampler && input.sampler !== 'default') payload.sampler_name = input.sampler
+  if (typeof input.clipSkip === 'number') payload.clip_skip = input.clipSkip
   if (input.controls && input.controls.length > 0) {
     payload.alwayson_scripts = {
       controlnet: {

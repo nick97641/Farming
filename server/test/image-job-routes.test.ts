@@ -460,3 +460,43 @@ test('generate preserves project edits saved while Draw Things is running', asyn
     },
   )
 })
+
+test('generate forwards the job\'s saved CLIP skip value to Draw Things', async () => {
+  const { project, job } = await createProjectWithJob({
+    advancedSettings: { ...createDefaultAdvancedSettings(), clipSkip: 3 },
+  })
+
+  const captured: { body: { clip_skip?: number } | null } = { body: null }
+  const stub = http.createServer((req, res) => {
+    if (req.url === '/sdapi/v1/options') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ model: 'local-test-model.ckpt' }))
+      return
+    }
+    if (req.url === '/sdapi/v1/txt2img' && req.method === 'POST') {
+      const chunks: Buffer[] = []
+      req.on('data', (chunk) => chunks.push(chunk))
+      req.on('end', () => {
+        captured.body = JSON.parse(Buffer.concat(chunks).toString('utf8'))
+        res.writeHead(200, { 'Content-Type': 'application/json' })
+        res.end(JSON.stringify({ images: [VALID_PNG.toString('base64')] }))
+      })
+      return
+    }
+    res.writeHead(404)
+    res.end()
+  })
+  await new Promise<void>((resolve) => stub.listen(0, '127.0.0.1', resolve))
+  const { port } = stub.address() as AddressInfo
+  const previousDrawThingsUrl = process.env.DRAW_THINGS_URL
+  process.env.DRAW_THINGS_URL = `http://127.0.0.1:${port}`
+  try {
+    const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/generate`, { method: 'POST' })
+    assert.equal(res.status, 200)
+    assert.equal(captured.body?.clip_skip, 3)
+  } finally {
+    if (previousDrawThingsUrl === undefined) delete process.env.DRAW_THINGS_URL
+    else process.env.DRAW_THINGS_URL = previousDrawThingsUrl
+    await new Promise((resolve) => stub.close(resolve))
+  }
+})
