@@ -159,3 +159,19 @@ test('project save and reload round trip preserves every idea field exactly', as
   const reloaded = await readProject('idea-round-trip')
   assert.deepEqual(reloaded.ideas[0], idea)
 })
+
+test('idea production stage persists through idea, draft, created, and published', async () => {
+  const projectId = 'idea-production-stage'
+  const project = await createProject({ id: projectId, title: 'Test', topic: 'hydroponics' })
+  await writeProject({ ...project, ideas: [blankIdea()] })
+
+  for (const productionStage of ['idea', 'draft', 'created', 'published'] as const) {
+    const loaded = await readProject(projectId)
+    await writeProject({
+      ...loaded,
+      ideas: loaded.ideas.map((idea) => ({ ...idea, productionStage, updatedAt: new Date().toISOString() })),
+    })
+    const reloaded = await readProject(projectId)
+    assert.equal(reloaded.ideas[0].productionStage, productionStage)
+  }
+})

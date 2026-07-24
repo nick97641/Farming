@@ -82,6 +82,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [pendingOpportunities, setPendingOpportunities] = useState<Idea[]>([])
   const [opportunityPhrasesWithNoResults, setOpportunityPhrasesWithNoResults] = useState<string[]>([])
   const [opportunityPhraseErrors, setOpportunityPhraseErrors] = useState<{ phrase: string; error: string }[]>([])
+  const [leaving, setLeaving] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
   const cancelGenerateRef = useRef(false)
@@ -105,6 +106,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setPendingOpportunities([])
     setOpportunityPhrasesWithNoResults([])
     setOpportunityPhraseErrors([])
+    setLeaving(false)
 
     getProject(projectId)
       .then(setProject)
@@ -145,6 +147,21 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
 
   function updateProject(updater: (current: Project) => Project) {
     setProject((current) => (current ? updater(current) : current))
+  }
+
+  async function handleBack() {
+    if (!project || leaving) return
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    setLeaving(true)
+    setSaveState('saving')
+    try {
+      await saveProject(project)
+      setSaveState('saved')
+      onBack()
+    } catch {
+      setSaveState('error')
+      setLeaving(false)
+    }
   }
 
   async function handleDelete() {
@@ -409,7 +426,20 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
         setGeneratingImageJobId(targetJobId)
         currentProject = await apiGenerateImageJob(currentProject.id, targetJobId)
         skipNextSave.current = true
-        setProject(currentProject)
+        setProject((current) => {
+          if (!current) return currentProject
+          const generatedJob = currentProject.imageJobs.find((candidate) => candidate.id === targetJobId)
+          if (!generatedJob) return current
+          const currentIds = new Set(current.imageJobs.map((candidate) => candidate.id))
+          return {
+            ...current,
+            updatedAt: currentProject.updatedAt,
+            imageJobs: [
+              ...current.imageJobs.map((candidate) => (candidate.id === targetJobId ? generatedJob : candidate)),
+              ...currentProject.imageJobs.filter((candidate) => !currentIds.has(candidate.id)),
+            ],
+          }
+        })
       }
     } catch (err) {
       setGenerateImageError(err instanceof Error ? err.message : 'Failed to generate image with Draw Things')
@@ -475,7 +505,9 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     <div className="workspace">
       <div className="workspace-toolbar">
         <div className="toolbar-left">
-          <button onClick={onBack}>&larr; Back to projects</button>
+          <button onClick={handleBack} disabled={leaving}>
+            {leaving ? 'Saving...' : '← Back to projects'}
+          </button>
         </div>
         <div className="toolbar-right">
           <span className={`save-indicator save-${saveState}`}>

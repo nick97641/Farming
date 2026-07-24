@@ -307,9 +307,19 @@ imageJobsRouter.post('/projects/:id/image-jobs/:jobId/generate', async (req, res
     }
     let updated: Project
     try {
+      // Generation may take several minutes. Merge the completed job into the
+      // latest project from disk so edits saved while Draw Things was running
+      // are never replaced by the snapshot captured at request start.
+      const latestProject = await readProject(project.id)
+      const latestJob = findJob(latestProject, job.id)
+      if (!latestJob) {
+        await deleteImageFile(project.id, output)
+        res.status(409).json({ error: 'This image job was deleted while generation was running' })
+        return
+      }
       updated = await writeProject({
-        ...project,
-        imageJobs: project.imageJobs.map((existing) => (existing.id === job.id ? updatedJob : existing)),
+        ...latestProject,
+        imageJobs: latestProject.imageJobs.map((existing) => (existing.id === job.id ? updatedJob : existing)),
       })
     } catch (error) {
       await deleteImageFile(project.id, output)

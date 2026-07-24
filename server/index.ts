@@ -13,7 +13,9 @@ import { videoRouter } from './routes/video.ts'
 const app = express()
 const port = Number(process.env.PORT ?? 4000)
 
-app.use(express.json())
+// Projects contain editable research, generated drafts, and evidence snapshots.
+// Express's 100KB default is too small for a healthy mature local project.
+app.use(express.json({ limit: '5mb' }))
 app.use('/api', healthRouter)
 app.use('/api', ollamaStatusRouter)
 app.use('/api', projectsRouter)

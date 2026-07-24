@@ -4,6 +4,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
+import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import type { Server } from 'node:http'
 
@@ -76,6 +77,43 @@ async function createProjectWithJob(overrides: Partial<ImageJob> = {}): Promise<
   }
   await writeProject({ ...project, imageJobs: [job] })
   return { project, job }
+}
+
+// A stand-in for the real Draw Things HTTP API, same idea as the stub
+// Ollama/FFmpeg/YouTube servers used elsewhere in this test suite —
+// exercises the actual generate/save/complete path against a real,
+// controllable HTTP response instead of only the pre-flight validation
+// paths (which is all the rest of this file's "generate" tests cover).
+async function withStubDrawThings(
+  run: () => Promise<void>,
+  beforeGenerateResponse: () => Promise<void> = async () => undefined,
+): Promise<void> {
+  const stub = http.createServer(async (req, res) => {
+    if (req.url === '/sdapi/v1/options') {
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ model: 'local-test-model.ckpt' }))
+      return
+    }
+    if (req.url === '/sdapi/v1/txt2img' && req.method === 'POST') {
+      await beforeGenerateResponse()
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(JSON.stringify({ images: [VALID_PNG.toString('base64')] }))
+      return
+    }
+    res.writeHead(404)
+    res.end()
+  })
+  await new Promise<void>((resolve) => stub.listen(0, '127.0.0.1', resolve))
+  const { port } = stub.address() as AddressInfo
+  const previousDrawThingsUrl = process.env.DRAW_THINGS_URL
+  process.env.DRAW_THINGS_URL = `http://127.0.0.1:${port}`
+  try {
+    await run()
+  } finally {
+    if (previousDrawThingsUrl === undefined) delete process.env.DRAW_THINGS_URL
+    else process.env.DRAW_THINGS_URL = previousDrawThingsUrl
+    await new Promise((resolve) => stub.close(resolve))
+  }
 }
 
 test('import rejects an unknown job ID', async () => {
@@ -364,4 +402,61 @@ test('generate accepts a Draw-Things-confirmed sampler value and proceeds past l
     if (previousDrawThingsUrl === undefined) delete process.env.DRAW_THINGS_URL
     else process.env.DRAW_THINGS_URL = previousDrawThingsUrl
   }
+})
+
+test('generate saves a successful Draw Things image and completes the job', async () => {
+  const { project, job } = await createProjectWithJob()
+
+  await withStubDrawThings(async () => {
+    const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/generate`, { method: 'POST' })
+    assert.equal(res.status, 200)
+    const updated = (await res.json()) as Project
+    const completed = updated.imageJobs.find((candidate) => candidate.id === job.id)
+    assert.ok(completed?.output)
+    assert.equal(completed.status, 'completed')
+    assert.equal(completed.sourceType, 'generated')
+    assert.equal(completed.effectiveModel, 'local-test-model.ckpt')
+    assert.match(completed.output.relativePath, /^assets[/\\]images[/\\]generated[/\\]/)
+
+    const fileRes = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/file`)
+    assert.equal(fileRes.status, 200)
+    assert.deepEqual(Buffer.from(await fileRes.arrayBuffer()), VALID_PNG)
+  })
+})
+
+test('generate preserves project edits saved while Draw Things is running', async () => {
+  const { project, job } = await createProjectWithJob()
+  let signalGenerationStarted!: () => void
+  let releaseGeneration!: () => void
+  const generationStarted = new Promise<void>((resolve) => {
+    signalGenerationStarted = resolve
+  })
+  const generationMayFinish = new Promise<void>((resolve) => {
+    releaseGeneration = resolve
+  })
+
+  await withStubDrawThings(
+    async () => {
+      const responsePromise = fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}/generate`, { method: 'POST' })
+      await generationStarted
+
+      const whileGenerating = await readProject(project.id)
+      await writeProject({ ...whileGenerating, title: 'Edited while Draw Things was running' })
+      releaseGeneration()
+
+      const res = await responsePromise
+      assert.equal(res.status, 200)
+      const updated = (await res.json()) as Project
+      assert.equal(updated.title, 'Edited while Draw Things was running')
+      assert.equal(updated.imageJobs.find((candidate) => candidate.id === job.id)?.status, 'completed')
+
+      const reloaded = await readProject(project.id)
+      assert.equal(reloaded.title, 'Edited while Draw Things was running')
+      assert.equal(reloaded.imageJobs.find((candidate) => candidate.id === job.id)?.status, 'completed')
+    },
+    async () => {
+      signalGenerationStarted()
+      await generationMayFinish
+    },
+  )
 })
