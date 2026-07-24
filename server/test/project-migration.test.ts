@@ -170,6 +170,60 @@ test('normalizeLegacyProject clears selectedIdeaId when the referenced idea exis
   assert.equal(normalized.selectedIdeaId, null)
 })
 
+test('normalizeLegacyProject defaults selectedImageJobId to null when missing entirely', () => {
+  const raw = { id: 'legacy-image-1', research: {}, ideas: [], imageJobs: [] }
+  const normalized = normalizeLegacyProject(raw) as { selectedImageJobId: unknown }
+  assert.equal(normalized.selectedImageJobId, null)
+})
+
+test('normalizeLegacyProject keeps selectedImageJobId when it references an existing completed job with a real output', () => {
+  const raw = {
+    id: 'legacy-image-2',
+    research: {},
+    ideas: [],
+    imageJobs: [
+      {
+        id: 'job-completed',
+        status: 'completed',
+        output: { fileName: 'a.png', relativePath: 'assets/images/generated/a.png', generatedAt: '2024-01-01T00:00:00.000Z' },
+      },
+    ],
+    selectedImageJobId: 'job-completed',
+  }
+  const normalized = normalizeLegacyProject(raw) as { selectedImageJobId: unknown }
+  assert.equal(normalized.selectedImageJobId, 'job-completed')
+})
+
+test('normalizeLegacyProject clears selectedImageJobId when the referenced job no longer exists', () => {
+  const raw = { id: 'legacy-image-3', research: {}, ideas: [], imageJobs: [], selectedImageJobId: 'job-deleted' }
+  const normalized = normalizeLegacyProject(raw) as { selectedImageJobId: unknown }
+  assert.equal(normalized.selectedImageJobId, null)
+})
+
+test('normalizeLegacyProject clears selectedImageJobId when the referenced job exists but is not completed', () => {
+  const raw = {
+    id: 'legacy-image-4',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-draft', status: 'draft', output: null }],
+    selectedImageJobId: 'job-draft',
+  }
+  const normalized = normalizeLegacyProject(raw) as { selectedImageJobId: unknown }
+  assert.equal(normalized.selectedImageJobId, null)
+})
+
+test('normalizeLegacyProject clears selectedImageJobId when the referenced job is marked completed but has no output', () => {
+  const raw = {
+    id: 'legacy-image-5',
+    research: {},
+    ideas: [],
+    imageJobs: [{ id: 'job-no-output', status: 'completed', output: null }],
+    selectedImageJobId: 'job-no-output',
+  }
+  const normalized = normalizeLegacyProject(raw) as { selectedImageJobId: unknown }
+  assert.equal(normalized.selectedImageJobId, null)
+})
+
 test('normalizeLegacyProject preserves a structurally valid existing designBrief unchanged', () => {
   const designBrief = {
     sourceIdeaId: 'idea-approved',

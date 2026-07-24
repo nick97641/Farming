@@ -399,6 +399,10 @@ imageJobsRouter.delete('/projects/:id/image-jobs/:jobId', async (req, res) => {
     {
       ...project,
       imageJobs: project.imageJobs.filter((existing) => existing.id !== job.id),
+      // A deleted job can never remain the preferred image — cleared here
+      // (not left to the client) since this route, not the generic project
+      // save, is the authoritative place a job disappears.
+      selectedImageJobId: project.selectedImageJobId === job.id ? null : project.selectedImageJobId,
     },
     { allowDeletedCompletedImageJobId: job.id },
   )

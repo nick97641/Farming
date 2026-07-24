@@ -610,6 +610,10 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onRemoveReference={handleRemoveReference}
             referenceImportingJobId={referenceImportingJobId}
             referenceImportError={referenceImportError}
+            selectedImageJobId={project.selectedImageJobId}
+            onChangeSelectedImageJobId={(selectedImageJobId) =>
+              updateProject((current) => ({ ...current, selectedImageJobId }))
+            }
           />
         )}
         {activeTab === 'content' && (

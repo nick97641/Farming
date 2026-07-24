@@ -20,6 +20,7 @@ import {
   ImageReferenceInfluenceSchema,
   ImageReferenceRoleSchema,
   ImageSeedModeSchema,
+  isImageJobSelectable,
   ProductionStageSchema,
 } from '../../shared/schema/project.ts'
 
@@ -460,7 +461,8 @@ function normalizeContent(raw: unknown): unknown {
 // been written (Phase 1 → Phase 2 → confidence field), and upgrades older
 // flat string arrays into their current shape, so previously saved projects
 // keep loading instead of being rejected as corrupt. Only touches `research`,
-// `ideas`, `selectedIdeaId`, `designBrief`, `imageJobs`, and `content`; every
+// `ideas`, `selectedIdeaId`, `designBrief`, `imageJobs`, `selectedImageJobId`,
+// and `content`; every
 // other top-level field is passed through untouched.
 export function normalizeLegacyProject(raw: unknown): unknown {
   if (!isRecord(raw)) return raw
@@ -481,6 +483,24 @@ export function normalizeLegacyProject(raw: unknown): unknown {
       return candidate.id === raw.selectedIdeaId && candidate.status === 'approved'
     })
       ? raw.selectedIdeaId
+      : null
+
+  const imageJobs = Array.isArray(raw.imageJobs)
+    ? raw.imageJobs.map(normalizeImageJob).filter((job): job is NonNullable<typeof job> => job !== null)
+    : []
+
+  // selectedImageJobId must always point at a job that still exists and is
+  // selectable (isImageJobSelectable — completed, with a real output).
+  // Anything else — missing entirely, deleted, or no longer complete — is
+  // reset to null here rather than rejected, same defensive-normalize
+  // approach as selectedIdeaId above.
+  const selectedImageJobId =
+    typeof raw.selectedImageJobId === 'string' &&
+    imageJobs.some((job) => {
+      const candidate = job as { id: string } & Parameters<typeof isImageJobSelectable>[0]
+      return candidate.id === raw.selectedImageJobId && isImageJobSelectable(candidate)
+    })
+      ? raw.selectedImageJobId
       : null
 
   return {
@@ -506,9 +526,8 @@ export function normalizeLegacyProject(raw: unknown): unknown {
     ideas,
     selectedIdeaId,
     designBrief: normalizeDesignBrief(raw.designBrief),
-    imageJobs: Array.isArray(raw.imageJobs)
-      ? raw.imageJobs.map(normalizeImageJob).filter((job): job is NonNullable<typeof job> => job !== null)
-      : [],
+    imageJobs,
+    selectedImageJobId,
     content: normalizeContent(raw.content),
   }
 }

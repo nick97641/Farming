@@ -354,6 +354,45 @@ test('deleting an unknown job ID returns 404', async () => {
   assert.equal(res.status, 404)
 })
 
+test('deleting the currently selected image job clears selectedImageJobId', async () => {
+  const { project, job } = await createProjectWithJob({
+    status: 'completed',
+    output: { fileName: 'selected.png', relativePath: 'assets/images/generated/selected.png', generatedAt: new Date().toISOString() },
+  })
+  await writeProject({ ...project, imageJobs: [job], selectedImageJobId: job.id })
+
+  const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${job.id}`, { method: 'DELETE' })
+  assert.equal(res.status, 200)
+  const updated = (await res.json()) as Project
+  assert.equal(updated.selectedImageJobId, null)
+
+  const reloaded = await readProject(project.id)
+  assert.equal(reloaded.selectedImageJobId, null)
+})
+
+test('deleting an unselected image job leaves selectedImageJobId untouched', async () => {
+  const { project, job: selectedJob } = await createProjectWithJob({
+    status: 'completed',
+    output: { fileName: 'keep.png', relativePath: 'assets/images/generated/keep.png', generatedAt: new Date().toISOString() },
+  })
+  const otherJob: ImageJob = {
+    ...selectedJob,
+    id: randomUUID(),
+    status: 'draft',
+    output: null,
+  }
+  await writeProject({
+    ...project,
+    imageJobs: [selectedJob, otherJob],
+    selectedImageJobId: selectedJob.id,
+  })
+
+  const res = await fetch(`${baseUrl}/projects/${project.id}/image-jobs/${otherJob.id}`, { method: 'DELETE' })
+  assert.equal(res.status, 200)
+  const updated = (await res.json()) as Project
+  assert.equal(updated.selectedImageJobId, selectedJob.id)
+})
+
 test('generate is blocked by the server-side factuality gate when a locked fact is missing from the prompt, independent of the client', async () => {
   const recipe = enrichImageRequest({
     userDescription: '',

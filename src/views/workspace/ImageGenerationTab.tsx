@@ -34,6 +34,8 @@ type Props = {
   onRemoveReference: (jobId: string, referenceId: string) => void
   referenceImportingJobId: string | null
   referenceImportError: string | null
+  selectedImageJobId: string | null
+  onChangeSelectedImageJobId: (jobId: string | null) => void
 }
 
 function createBlankJob(designBrief: DesignBrief | null): ImageJob {
@@ -88,6 +90,8 @@ export function ImageGenerationTab({
   onRemoveReference,
   referenceImportingJobId,
   referenceImportError,
+  selectedImageJobId,
+  onChangeSelectedImageJobId,
 }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const editingJob = imageJobs.find((job) => job.id === editingId) ?? null
@@ -183,9 +187,12 @@ export function ImageGenerationTab({
                       projectId={projectId}
                       job={sibling}
                       designBrief={designBrief}
+                      isSelected={sibling.id === selectedImageJobId}
                       onEdit={() => setEditingId(sibling.id)}
                       onDuplicate={() => handleDuplicate(sibling)}
                       onDelete={() => handleDelete(sibling)}
+                      onSelectImage={() => onChangeSelectedImageJobId(sibling.id)}
+                      onDeselectImage={() => onChangeSelectedImageJobId(null)}
                     />
                   ))}
                 </ul>

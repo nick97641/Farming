@@ -589,6 +589,16 @@ export const ImageJobSchema = z.object({
 })
 export type ImageJob = z.infer<typeof ImageJobSchema>
 
+// The single rule for whether a job may become `Project.selectedImageJobId`
+// — completed AND carrying a real output, checked as two independent
+// conditions (never just one) since defensively-loaded legacy data could in
+// principle have either without the other. Shared by the client (gates the
+// "Use this image" button) and the server (re-validates on legacy load), so
+// both sides of the rule can never drift apart.
+export function isImageJobSelectable(job: Pick<ImageJob, 'status' | 'output'>): boolean {
+  return job.status === 'completed' && job.output !== null
+}
+
 export const ShortSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -651,23 +661,42 @@ export type ExportRecord = z.infer<typeof ExportRecordSchema>
 export const ProjectStatusSchema = z.enum(['draft', 'in-progress', 'complete'])
 export type ProjectStatus = z.infer<typeof ProjectStatusSchema>
 
-export const ProjectSchema = z.object({
-  id: z.string(),
-  title: z.string(),
-  topic: z.string(),
-  status: ProjectStatusSchema,
-  research: ResearchSchema,
-  ideas: z.array(IdeaSchema),
-  selectedIdeaId: z.string().nullable(),
-  designBrief: DesignBriefSchema.nullable(),
-  imageJobs: z.array(ImageJobSchema),
-  content: ContentSchema,
-  products: ProductsSchema,
-  assets: z.array(AssetSchema),
-  exports: z.array(ExportRecordSchema),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-})
+export const ProjectSchema = z
+  .object({
+    id: z.string(),
+    title: z.string(),
+    topic: z.string(),
+    status: ProjectStatusSchema,
+    research: ResearchSchema,
+    ideas: z.array(IdeaSchema),
+    selectedIdeaId: z.string().nullable(),
+    designBrief: DesignBriefSchema.nullable(),
+    imageJobs: z.array(ImageJobSchema),
+    // The user's manually-chosen preferred image among this project's
+    // completed image jobs — never derived or auto-picked. Must reference a
+    // job satisfying isImageJobSelectable(); enforced server-authoritatively
+    // by the superRefine below on every write (not just legacy loads), and
+    // re-applied defensively by normalizeLegacyProject before this schema
+    // ever sees older on-disk data.
+    selectedImageJobId: z.string().nullable(),
+    content: ContentSchema,
+    products: ProductsSchema,
+    assets: z.array(AssetSchema),
+    exports: z.array(ExportRecordSchema),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  })
+  .superRefine((project, ctx) => {
+    if (project.selectedImageJobId === null) return
+    const selected = project.imageJobs.find((job) => job.id === project.selectedImageJobId)
+    if (!selected || !isImageJobSelectable(selected)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['selectedImageJobId'],
+        message: 'selectedImageJobId must reference a completed image job with a real output',
+      })
+    }
+  })
 export type Project = z.infer<typeof ProjectSchema>
 
 export function createEmptyProject(input: { id: string; title: string; topic: string }): Project {
@@ -699,6 +728,7 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
     selectedIdeaId: null,
     designBrief: null,
     imageJobs: [],
+    selectedImageJobId: null,
     content: {
       longFormScript: '',
       pdfDraft: '',
