@@ -1,5 +1,9 @@
 # Farming
 
+Version 0.1.0 is the verified minimal local release: idea generation, content
+generation, image generation, and production-stage tracking have all been
+smoke-tested end-to-end against real local Ollama and Draw Things instances.
+
 Farming is a local-first content production workspace for gardening and
 hydroponics projects. The minimal local version supports:
 
