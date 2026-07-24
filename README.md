@@ -8,6 +8,11 @@ Version 0.2.0 adds preferred completed-image selection (with
 server-authoritative validation of the selection) and a read-only Production
 Summary on the Overview tab.
 
+Version 0.3.0 adds manually managed publication tracking for ideas — URL,
+date, platform/channel, and notes — with safe legacy-project migration,
+publication details surfaced in the read-only Production Summary, and safe
+clickable HTTP/HTTPS publication links.
+
 Farming is a local-first content production workspace for gardening and
 hydroponics projects. The minimal local version supports:
 
