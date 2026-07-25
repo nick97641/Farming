@@ -22,11 +22,14 @@ import {
 import { duplicateImageJob } from '../lib/imageJobOptions'
 import { ContentTab } from './workspace/ContentTab'
 import { DesignBriefTab } from './workspace/DesignBriefTab'
+import { ExportTab } from './workspace/ExportTab'
 import { IdeasTab } from './workspace/IdeasTab'
 import { ImageGenerationTab } from './workspace/ImageGenerationTab'
 import { OverviewTab } from './workspace/OverviewTab'
+import { ProductsTab } from './workspace/ProductsTab'
 import { ResearchTab } from './workspace/ResearchTab'
 import { VideoTab } from './workspace/VideoTab'
+import { AssetsTab } from './workspace/AssetsTab'
 
 type Props = {
   projectId: string
@@ -46,9 +49,9 @@ const TABS = [
   { id: 'images', label: 'Image Generation', enabled: true },
   { id: 'content', label: 'Content', enabled: true },
   { id: 'video', label: 'Video', enabled: true },
-  { id: 'assets', label: 'Assets', enabled: false },
-  { id: 'products', label: 'Products', enabled: false },
-  { id: 'export', label: 'Export', enabled: false },
+  { id: 'assets', label: 'Assets', enabled: true },
+  { id: 'products', label: 'Products', enabled: true },
+  { id: 'export', label: 'Export', enabled: true },
 ] as const
 
 type TabId = (typeof TABS)[number]['id']
@@ -179,7 +182,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     link.href = url
     link.download = `${project.id}.json`
     link.click()
-    URL.revokeObjectURL(url)
+    window.setTimeout(() => URL.revokeObjectURL(url), 0)
   }
 
   async function handleOrganize() {
@@ -648,6 +651,21 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             renderError={renderVideoError}
             onRender={handleRenderVideo}
           />
+        )}
+        {activeTab === 'assets' && (
+          <AssetsTab projectId={project.id} imageJobs={project.imageJobs} assets={project.assets} />
+        )}
+        {activeTab === 'products' && (
+          <ProductsTab
+            project={project}
+            products={project.products}
+            selectedIdea={project.ideas.find((idea) => idea.id === project.selectedIdeaId) ?? null}
+            onChangeProducts={(products) => updateProject((current) => ({ ...current, products }))}
+            onExportPdf={handleExportPdf}
+          />
+        )}
+        {activeTab === 'export' && (
+          <ExportTab project={project} onExportProjectJson={handleExport} onExportPdf={handleExportPdf} />
         )}
       </div>
     </div>

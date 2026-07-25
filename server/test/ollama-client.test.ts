@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { buildOrganizePrompt, OrganizeResponseSchema } from '../lib/ollama-client.ts'
+import { buildOrganizePrompt, OrganizeResponseFormat, OrganizeResponseSchema } from '../lib/ollama-client.ts'
 
 test('buildOrganizePrompt includes both manual notes and pasted research verbatim', () => {
   const prompt = buildOrganizePrompt({ manualNotes: 'Lettuce grows fast in DWC.', pastedResearch: 'Forum post: pH matters.' })
@@ -67,4 +67,10 @@ test('OrganizeResponseSchema rejects an item that is still a plain string instea
   }
   const result = OrganizeResponseSchema.safeParse(sample)
   assert.equal(result.success, false)
+})
+
+test('OrganizeResponseFormat gives Ollama the required structured-output schema', () => {
+  assert.equal(OrganizeResponseFormat.type, 'object')
+  assert.ok(OrganizeResponseFormat.required?.includes('organizedSummary'))
+  assert.ok(OrganizeResponseFormat.required?.includes('keywords'))
 })

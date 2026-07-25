@@ -1,4 +1,5 @@
 import express from 'express'
+import { loadEnvFile } from 'node:process'
 
 import { contentRouter } from './routes/content.ts'
 import { healthRouter } from './routes/health.ts'
@@ -9,6 +10,12 @@ import { opportunityScoutRouter } from './routes/opportunity-scout.ts'
 import { projectsRouter } from './routes/projects.ts'
 import { researchRouter } from './routes/research.ts'
 import { videoRouter } from './routes/video.ts'
+
+try {
+  loadEnvFile('.env.local')
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+}
 
 const app = express()
 const port = Number(process.env.PORT ?? 4000)

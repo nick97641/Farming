@@ -761,6 +761,76 @@ button:disabled {
   font-size: 14px;
 }
 
+.artifact-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.asset-grid,
+.artifact-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.asset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 12px;
+}
+
+.asset-grid li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.asset-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 6px;
+  background: var(--surface-muted);
+}
+
+.asset-grid span,
+.artifact-list span {
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.artifact-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.artifact-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.artifact-list li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.artifact-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .idea-source-list {
   list-style: none;
   margin: 0 0 12px;

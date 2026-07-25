@@ -58,6 +58,7 @@ export const OrganizeResponseSchema = z.object({
   competitorAngles: z.array(ConfidentTextSchema),
 })
 export type OrganizeResearchResult = z.infer<typeof OrganizeResponseSchema>
+export const OrganizeResponseFormat = z.toJSONSchema(OrganizeResponseSchema)
 
 const SYSTEM_PROMPT = `You are a research-organizing assistant for a gardening and hydroponics content creator.
 You only summarize, organize, and identify patterns in the text the user gives you.
@@ -110,7 +111,7 @@ export async function organizeResearch(input: {
         model: getOllamaModel(),
         system: SYSTEM_PROMPT,
         prompt: buildOrganizePrompt(input),
-        format: 'json',
+        format: OrganizeResponseFormat,
         stream: false,
       }),
       signal: AbortSignal.timeout(120_000),
