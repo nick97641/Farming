@@ -3,6 +3,7 @@
   --text-muted: #6b6375;
   --bg: #fdfdfb;
   --border: #e5e4e7;
+  --surface-muted: #f4f4f1;
   --accent: #3a7d44;
   --ok-bg: rgba(58, 125, 68, 0.12);
   --ok-text: #3a7d44;
@@ -21,6 +22,7 @@
     --text-muted: #9ca3af;
     --bg: #16171d;
     --border: #2e303a;
+    --surface-muted: #22242c;
     --accent: #6bbf78;
     --ok-bg: rgba(107, 191, 120, 0.15);
     --ok-text: #6bbf78;
