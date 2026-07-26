@@ -28,6 +28,10 @@ export function getExportsDir(projectId: string): string {
   return path.join(getProjectDir(projectId), 'exports')
 }
 
+export function getResearchDir(projectId: string): string {
+  return path.join(getProjectDir(projectId), 'research')
+}
+
 export function getAssetDir(projectId: string, assetType: AssetType): string {
   return path.join(getProjectDir(projectId), 'assets', ASSET_TYPE_TO_FOLDER[assetType])
 }

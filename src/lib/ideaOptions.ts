@@ -40,6 +40,10 @@ export const PRODUCTION_STAGE_LABELS: Record<ProductionStage, string> = Object.f
   PRODUCTION_STAGE_OPTIONS.map((option) => [option.value, option.label]),
 ) as Record<ProductionStage, string>
 
+export function approveIdea(idea: Idea, now = new Date().toISOString()): Idea {
+  return { ...idea, status: 'approved', updatedAt: now }
+}
+
 // Pulled out as a pure function (same reasoning as duplicateImageJob in
 // imageJobOptions.ts) so "a duplicate never carries over the source's
 // publication record" is independently testable without a React test setup.

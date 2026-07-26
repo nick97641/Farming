@@ -30,6 +30,19 @@ test('buildGenerateIdeasPrompt fills in a placeholder when the topic and notes a
   assert.ok(prompt.includes('(none provided)'))
 })
 
+test('buildGenerateIdeasPrompt reuses findings from the saved automatic research library', () => {
+  const research = sampleResearch()
+  research.library = [{
+    id: 'run-1', topic: 'DWC lettuce', summary: 'Found a recurring beginner setup problem.',
+    findings: ['Viewers ask how to prevent algae in clear reservoirs.'], sources: [],
+    searchPhrases: ['DWC beginner mistakes'], createdAt: '2026-07-25T12:00:00.000Z',
+    relativePath: 'research/run-1.md',
+  }]
+  const prompt = buildGenerateIdeasPrompt({ topic: 'DWC lettuce', research, count: 3 })
+  assert.ok(prompt.includes('Saved automatic research'))
+  assert.ok(prompt.includes('prevent algae in clear reservoirs'))
+})
+
 test('GeneratedIdeaSchema accepts a well-formed idea with citations', () => {
   const result = GeneratedIdeaSchema.safeParse({
     title: 'Beginner DWC Lettuce Guide',

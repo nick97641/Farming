@@ -13,6 +13,7 @@ import {
   getProjectFilePath,
   getProjectsRoot,
   getReferenceImagesDir,
+  getResearchDir,
 } from './paths.ts'
 import { normalizeLegacyProject } from './project-migration.ts'
 
@@ -69,6 +70,7 @@ async function pathExists(target: string): Promise<boolean> {
 async function scaffoldProjectFolders(projectId: string): Promise<void> {
   await mkdir(getProjectDir(projectId), { recursive: true })
   await mkdir(getExportsDir(projectId), { recursive: true })
+  await mkdir(getResearchDir(projectId), { recursive: true })
   for (const dir of getAllAssetDirs(projectId)) {
     await mkdir(dir, { recursive: true })
   }
@@ -79,6 +81,14 @@ async function scaffoldProjectFolders(projectId: string): Promise<void> {
   await mkdir(getImportedImagesDir(projectId), { recursive: true })
   await mkdir(getGeneratedImagesDir(projectId), { recursive: true })
   await mkdir(getReferenceImagesDir(projectId), { recursive: true })
+}
+
+export async function writeResearchFile(projectId: string, fileName: string, contents: string): Promise<string> {
+  const dir = getResearchDir(projectId)
+  await mkdir(dir, { recursive: true })
+  const safeName = path.basename(fileName)
+  await writeFile(path.join(dir, safeName), contents, 'utf8')
+  return path.join('research', safeName)
 }
 
 // Validates before writing anything to disk, then writes to a temp file in the

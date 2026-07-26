@@ -9,6 +9,7 @@ import { ollamaStatusRouter } from './routes/ollama-status.ts'
 import { opportunityScoutRouter } from './routes/opportunity-scout.ts'
 import { projectsRouter } from './routes/projects.ts'
 import { researchRouter } from './routes/research.ts'
+import { researchJobsRouter } from './routes/research-jobs.ts'
 import { videoRouter } from './routes/video.ts'
 
 try {
@@ -27,6 +28,7 @@ app.use('/api', healthRouter)
 app.use('/api', ollamaStatusRouter)
 app.use('/api', projectsRouter)
 app.use('/api', researchRouter)
+app.use('/api', researchJobsRouter)
 app.use('/api', ideasRouter)
 app.use('/api', imageJobsRouter)
 app.use('/api', contentRouter)

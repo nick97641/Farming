@@ -9,7 +9,13 @@ import {
   type ProductionStage,
   type Research,
 } from '../../../shared/schema/project'
-import { CONTENT_TYPE_OPTIONS, duplicateIdea, PRODUCTION_STAGE_OPTIONS, STATUS_OPTIONS } from '../../lib/ideaOptions'
+import {
+  approveIdea,
+  CONTENT_TYPE_OPTIONS,
+  duplicateIdea,
+  PRODUCTION_STAGE_OPTIONS,
+  STATUS_OPTIONS,
+} from '../../lib/ideaOptions'
 import { GeneratedIdeaReview } from './GeneratedIdeaReview'
 import { IdeaCard } from './IdeaCard'
 import { IdeaEditor } from './IdeaEditor'
@@ -56,7 +62,7 @@ function createBlankIdea(): Idea {
 }
 
 const CONFIDENCE_RANK: Record<Confidence, number> = { high: 3, medium: 2, low: 1 }
-type SortOption = 'newest' | 'oldest' | 'title' | 'confidence'
+type SortOption = 'interest' | 'newest' | 'oldest' | 'title' | 'confidence'
 
 export function IdeasTab({
   ideas,
@@ -75,7 +81,7 @@ export function IdeasTab({
   const [productionStageFilter, setProductionStageFilter] = useState<'all' | ProductionStage>('all')
   const [contentTypeFilter, setContentTypeFilter] = useState<'all' | IdeaContentType>('all')
   const [confidenceFilter, setConfidenceFilter] = useState<'all' | Confidence>('all')
-  const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [sortBy, setSortBy] = useState<SortOption>('interest')
   const [generateCount, setGenerateCount] = useState(5)
 
   const editingIdea = ideas.find((idea) => idea.id === editingIdeaId) ?? null
@@ -88,6 +94,7 @@ export function IdeasTab({
     if (confidenceFilter !== 'all') list = list.filter((idea) => idea.confidence === confidenceFilter)
 
     const sorted = [...list]
+    if (sortBy === 'interest') sorted.sort((a, b) => (b.interestScore ?? -1) - (a.interestScore ?? -1))
     if (sortBy === 'newest') sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
     if (sortBy === 'oldest') sorted.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
     if (sortBy === 'title') sorted.sort((a, b) => a.title.localeCompare(b.title))
@@ -116,6 +123,11 @@ export function IdeasTab({
 
   function handleDuplicateIdea(idea: Idea) {
     onChangeIdeas([...ideas, duplicateIdea(idea)])
+  }
+
+  function handleApproveAndSelect(idea: Idea) {
+    onChangeIdeas(ideas.map((candidate) => (candidate.id === idea.id ? approveIdea(candidate) : candidate)))
+    onChangeSelectedIdeaId(idea.id)
   }
 
   function handleAcceptDraft(draft: Idea) {
@@ -167,8 +179,8 @@ export function IdeasTab({
   return (
     <div className="ideas-tab">
       <p className="tab-explanation">
-        Turn your research into concrete content and product ideas. Create ideas manually, or generate draft
-        suggestions from your research with AI — nothing from AI generation is saved until you review and accept it.
+        Ideas discovered by automatic research are saved as drafts and ranked by comparative source interest. Approve
+        and select the one you want to produce; reject or delete the rest. Manual and AI-only ideas remain available.
       </p>
 
       <div className="ideas-toolbar">
@@ -246,6 +258,7 @@ export function IdeasTab({
         <label>
           Sort by
           <select value={sortBy} onChange={(event) => setSortBy(event.target.value as SortOption)}>
+            <option value="interest">Highest interest</option>
             <option value="newest">Newest</option>
             <option value="oldest">Oldest</option>
             <option value="title">Title</option>
@@ -268,6 +281,7 @@ export function IdeasTab({
               onDuplicate={() => handleDuplicateIdea(idea)}
               onDelete={() => handleDeleteIdea(idea.id, idea.title)}
               onSelectForProduction={() => onChangeSelectedIdeaId(idea.id)}
+              onApproveAndSelect={() => handleApproveAndSelect(idea)}
               onRemoveFromProduction={() => onChangeSelectedIdeaId(null)}
             />
           ))}

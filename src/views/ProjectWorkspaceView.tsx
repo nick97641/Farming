@@ -5,7 +5,7 @@ import {
   deleteImageJob as apiDeleteImageJob,
   deleteProject,
   deleteReferencePhoto as apiDeleteReferencePhoto,
-  findOpportunities as apiFindOpportunities,
+  getResearchJob as apiGetResearchJob,
   generateContent as apiGenerateContent,
   generateImageJob as apiGenerateImageJob,
   generateIdeas as apiGenerateIdeas,
@@ -16,11 +16,14 @@ import {
   organizeResearch as apiOrganizeResearch,
   renderVideo as apiRenderVideo,
   saveProject,
+  startResearchJob as apiStartResearchJob,
   type ContentGenerationTarget,
   type OpportunityScoutConfig,
+  type ResearchJob,
 } from '../lib/api'
 import { duplicateImageJob } from '../lib/imageJobOptions'
 import { ContentTab } from './workspace/ContentTab'
+import { createBriefFromIdea } from '../lib/designBriefOptions'
 import { DesignBriefTab } from './workspace/DesignBriefTab'
 import { ExportTab } from './workspace/ExportTab'
 import { IdeasTab } from './workspace/IdeasTab'
@@ -85,6 +88,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
   const [pendingOpportunities, setPendingOpportunities] = useState<Idea[]>([])
   const [opportunityPhrasesWithNoResults, setOpportunityPhrasesWithNoResults] = useState<string[]>([])
   const [opportunityPhraseErrors, setOpportunityPhraseErrors] = useState<{ phrase: string; error: string }[]>([])
+  const [researchJob, setResearchJob] = useState<ResearchJob | null>(null)
   const [leaving, setLeaving] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const skipNextSave = useRef(true)
@@ -109,6 +113,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     setPendingOpportunities([])
     setOpportunityPhrasesWithNoResults([])
     setOpportunityPhraseErrors([])
+    setResearchJob(null)
     setLeaving(false)
 
     getProject(projectId)
@@ -292,7 +297,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
-  async function handleFindOpportunities(config: OpportunityScoutConfig) {
+  async function handleFindOpportunities(config: OpportunityScoutConfig, mode: 'topic' | 'discover' = 'topic') {
     if (!project) return
     setFindingOpportunities(true)
     setFindOpportunitiesError(null)
@@ -303,10 +308,21 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
       await saveProject(project)
       setSaveState('saved')
 
-      const result = await apiFindOpportunities(project.id, config)
-      setPendingOpportunities(result.ideas)
-      setOpportunityPhrasesWithNoResults(result.phrasesWithNoResults)
-      setOpportunityPhraseErrors(result.phraseErrors)
+      let job = await apiStartResearchJob(project.id, { topic: config.seedTopic, mode })
+      setResearchJob(job)
+      while (job.state === 'queued' || job.state === 'running') {
+        await new Promise((resolve) => window.setTimeout(resolve, 750))
+        job = await apiGetResearchJob(project.id, job.id)
+        setResearchJob(job)
+      }
+      if (job.state === 'failed') throw new Error(job.error ?? 'Automatic research failed')
+      if (job.result) {
+        skipNextSave.current = true
+        setProject(job.result.project)
+      }
+      setPendingOpportunities([])
+      setOpportunityPhrasesWithNoResults([])
+      setOpportunityPhraseErrors([])
     } catch (err) {
       setFindOpportunitiesError(err instanceof Error ? err.message : 'Failed to find opportunities')
     } finally {
@@ -453,6 +469,34 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
     }
   }
 
+  async function handleGenerateApprovalSet(jobIds: string[]) {
+    if (!project || jobIds.length === 0) return
+    setGenerateImageError(null)
+    setCanCancelGenerate(true)
+    cancelGenerateRef.current = false
+    try {
+      if (saveTimer.current) clearTimeout(saveTimer.current)
+      let currentProject = await saveProject(project)
+      skipNextSave.current = true
+      setProject(currentProject)
+      for (let index = 0; index < jobIds.length; index += 1) {
+        if (cancelGenerateRef.current) break
+        const jobId = jobIds[index]
+        setGeneratingImageJobId(jobId)
+        setGenerateProgressLabel(`Generating approval image ${index + 1} of ${jobIds.length}`)
+        currentProject = await apiGenerateImageJob(currentProject.id, jobId)
+        skipNextSave.current = true
+        setProject(currentProject)
+      }
+    } catch (err) {
+      setGenerateImageError(err instanceof Error ? err.message : 'Failed to generate the approval image set')
+    } finally {
+      setGeneratingImageJobId(null)
+      setGenerateProgressLabel(null)
+      setCanCancelGenerate(false)
+    }
+  }
+
   function handleCancelGenerate() {
     cancelGenerateRef.current = true
   }
@@ -561,6 +605,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
         )}
         {activeTab === 'research' && (
           <ResearchTab
+            projectTopic={project.topic}
             research={project.research}
             onChangeResearch={(research) => updateProject((current) => ({ ...current, research }))}
             onOrganize={handleOrganize}
@@ -569,6 +614,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             onFindOpportunities={handleFindOpportunities}
             findingOpportunities={findingOpportunities}
             findOpportunitiesError={findOpportunitiesError}
+            researchJob={researchJob}
             pendingOpportunities={pendingOpportunities}
             opportunityPhrasesWithNoResults={opportunityPhrasesWithNoResults}
             opportunityPhraseErrors={opportunityPhraseErrors}
@@ -589,7 +635,16 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             generating={generatingIdeas}
             generateError={generateIdeasError}
             selectedIdeaId={project.selectedIdeaId}
-            onChangeSelectedIdeaId={(selectedIdeaId) => updateProject((current) => ({ ...current, selectedIdeaId }))}
+            onChangeSelectedIdeaId={(selectedIdeaId) =>
+              updateProject((current) => {
+                const selected = selectedIdeaId ? current.ideas.find((idea) => idea.id === selectedIdeaId) : null
+                return {
+                  ...current,
+                  selectedIdeaId,
+                  designBrief: selected && !current.designBrief ? createBriefFromIdea(selected) : current.designBrief,
+                }
+              })
+            }
           />
         )}
         {activeTab === 'brief' && (
@@ -613,6 +668,7 @@ export function ProjectWorkspaceView({ projectId, onBack, onDeleted }: Props) {
             importError={importImageError}
             onDeleteJob={handleDeleteImageJob}
             onGenerateVariations={handleGenerateVariations}
+            onGenerateApprovalSet={handleGenerateApprovalSet}
             generatingJobId={generatingImageJobId}
             generateProgressLabel={generateProgressLabel}
             generateError={generateImageError}

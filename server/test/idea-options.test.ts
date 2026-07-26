@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 
-import { duplicateIdea } from '../../src/lib/ideaOptions.ts'
+import { approveIdea, duplicateIdea } from '../../src/lib/ideaOptions.ts'
 import { createDefaultIdeaPublicationInfo, type Idea } from '../../shared/schema/project.ts'
 
 function publishedIdea(): Idea {
@@ -69,4 +69,13 @@ test('duplicateIdea falls back to a generic title when the source has none', () 
   const original = { ...publishedIdea(), title: '' }
   const copy = duplicateIdea(original)
   assert.equal(copy.title, 'Untitled idea (Copy)')
+})
+
+test('approveIdea makes an idea immediately eligible for production selection', () => {
+  const draft = { ...publishedIdea(), status: 'draft' as const, updatedAt: '2024-01-01T00:00:00.000Z' }
+  const approved = approveIdea(draft, '2026-07-25T12:00:00.000Z')
+
+  assert.equal(approved.status, 'approved')
+  assert.equal(approved.updatedAt, '2026-07-25T12:00:00.000Z')
+  assert.equal(draft.status, 'draft')
 })

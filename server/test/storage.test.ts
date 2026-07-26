@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 
 import { createProject, readProject, writeProject } from '../lib/storage.ts'
-import { getGeneratedImagesDir, getImportedImagesDir } from '../lib/paths.ts'
+import { getGeneratedImagesDir, getImportedImagesDir, getResearchDir } from '../lib/paths.ts'
 import { createDefaultStructuredRequirements, ENRICHMENT_POLICY_VERSION } from '../../shared/imageEnrichment.ts'
 import { DEFAULT_MODEL_PROFILE_ID } from '../../shared/modelProfiles.ts'
 import {
@@ -124,8 +124,10 @@ test('creating a project scaffolds the imported/ and generated/ image subfolders
 
   const importedEntries = await readdir(getImportedImagesDir('image-folders-test'))
   const generatedEntries = await readdir(getGeneratedImagesDir('image-folders-test'))
+  const researchEntries = await readdir(getResearchDir('image-folders-test'))
   assert.deepEqual(importedEntries, [])
   assert.deepEqual(generatedEntries, [])
+  assert.deepEqual(researchEntries, [])
 })
 
 test('a completed image job with an output persists unchanged through save and reload', async () => {

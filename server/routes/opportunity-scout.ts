@@ -4,7 +4,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { generateSearchPhrases, OllamaOpportunityScoutError, synthesizeOpportunityDrafts } from '../lib/ollama-client.ts'
-import { ProjectDataCorruptError, ProjectNotFoundError, readProject } from '../lib/storage.ts'
+import { ProjectDataCorruptError, ProjectNotFoundError, readProject, writeProject, writeResearchFile } from '../lib/storage.ts'
 import {
   computeEngagementRate,
   computeMedian,
@@ -17,6 +17,7 @@ import {
 } from '../lib/youtube-client.ts'
 import {
   createDefaultIdeaPublicationInfo,
+  type AutomatedResearchRun,
   type Idea,
   type YoutubeOpportunityEvidence,
   type YoutubeVideoEvidence,
@@ -57,8 +58,9 @@ opportunityScoutRouter.post('/projects/:id/research/opportunity-scout', async (r
   }
   const config = parsedBody.data
 
+  let project
   try {
-    await readProject(req.params.id)
+    project = await readProject(req.params.id)
   } catch (error) {
     if (error instanceof ProjectNotFoundError) {
       res.status(404).json({ error: error.message })
@@ -156,7 +158,7 @@ opportunityScoutRouter.post('/projects/:id/research/opportunity-scout', async (r
   }
 
   if (phraseResults.length === 0) {
-    res.json({ ideas: [], phrasesWithNoResults, phraseErrors })
+    res.json({ ideas: [], phrasesWithNoResults, phraseErrors, project })
     return
   }
 
@@ -270,5 +272,60 @@ opportunityScoutRouter.post('/projects/:id/research/opportunity-scout', async (r
     }
   })
 
-  res.json({ ideas, phrasesWithNoResults, phraseErrors })
+  const uniqueSources = new Map<string, YoutubeVideoEvidence>()
+  for (const phrase of phraseSignals) {
+    for (const video of phrase.videos) uniqueSources.set(video.videoId, video)
+  }
+  const findings = ideas
+    .map((idea) => [idea.title, idea.summary].filter(Boolean).join(' — '))
+    .filter((finding) => finding.length > 0)
+  const runId = randomUUID()
+  const fileName = `${nowIso.replace(/[:.]/g, '-')}-${runId.slice(0, 8)}.md`
+  const sourceList = [...uniqueSources.values()]
+  const markdown = [
+    `# Automatic research: ${config.seedTopic}`,
+    '',
+    `Retrieved: ${nowIso}`,
+    '',
+    '## Search phrases',
+    ...phrases.map((phrase) => `- ${phrase}`),
+    '',
+    '## Findings',
+    ...(findings.length > 0 ? findings.map((finding) => `- ${finding}`) : ['- No synthesized findings.']),
+    '',
+    '## Sources',
+    ...sourceList.map(
+      (video) =>
+        `- [${video.title}](${video.url}) — ${video.channelTitle}; published ${video.publishedAt}; ` +
+        `${video.viewCount.toLocaleString()} views at retrieval`,
+    ),
+    '',
+    '> AI-written findings are unverified. Source titles and public metrics are snapshots from the YouTube Data API.',
+    '',
+  ].join('\n')
+  const relativePath = await writeResearchFile(project.id, fileName, markdown)
+  const researchRun: AutomatedResearchRun = {
+    id: runId,
+    topic: config.seedTopic,
+    summary: `Found ${sourceList.length} YouTube source${sourceList.length === 1 ? '' : 's'} across ${phraseSignals.length} search phrase${phraseSignals.length === 1 ? '' : 's'}.`,
+    findings,
+    sources: sourceList.map((video) => ({
+      sourceType: 'youtube',
+      title: video.title,
+      url: video.url,
+      channelTitle: video.channelTitle,
+      publishedAt: video.publishedAt,
+      retrievedAt: video.retrievedAt,
+      excerpt: video.description.slice(0, 500),
+    })),
+    searchPhrases: phrases,
+    createdAt: nowIso,
+    relativePath,
+  }
+  project = await writeProject({
+    ...project,
+    research: { ...project.research, library: [researchRun, ...project.research.library] },
+  })
+
+  res.json({ ideas, phrasesWithNoResults, phraseErrors, project, researchRun })
 })

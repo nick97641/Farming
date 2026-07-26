@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { Idea, YoutubeOpportunityEvidence } from '../../../shared/schema/project'
-import type { OpportunityScoutConfig } from '../../lib/api'
+import type { OpportunityScoutConfig, ResearchJob } from '../../lib/api'
 
 function SupportingVideosDetails({ evidence }: { evidence: YoutubeOpportunityEvidence }) {
   return (
@@ -38,9 +38,11 @@ function SupportingVideosDetails({ evidence }: { evidence: YoutubeOpportunityEvi
 }
 
 type Props = {
-  onFindOpportunities: (config: OpportunityScoutConfig) => void
+  projectTopic: string
+  onFindOpportunities: (config: OpportunityScoutConfig, mode?: 'topic' | 'discover') => void
   finding: boolean
   findError: string | null
+  researchJob: ResearchJob | null
   pendingOpportunities: Idea[]
   phrasesWithNoResults: string[]
   phraseErrors: { phrase: string; error: string }[]
@@ -60,9 +62,11 @@ const DEFAULT_CONFIG: OpportunityScoutConfig = {
 }
 
 export function OpportunityScoutSection({
+  projectTopic,
   onFindOpportunities,
   finding,
   findError,
+  researchJob,
   pendingOpportunities,
   phrasesWithNoResults,
   phraseErrors,
@@ -71,13 +75,17 @@ export function OpportunityScoutSection({
   onDiscard,
   onDiscardAll,
 }: Props) {
-  const [config, setConfig] = useState<OpportunityScoutConfig>(DEFAULT_CONFIG)
+  const [config, setConfig] = useState<OpportunityScoutConfig>({ ...DEFAULT_CONFIG, seedTopic: projectTopic })
 
   function patchConfig(patch: Partial<OpportunityScoutConfig>) {
     setConfig((current) => ({ ...current, ...patch }))
   }
 
   const canSubmit = config.seedTopic.trim().length > 0 && !finding
+
+  const providerLabels: Record<keyof ResearchJob['providers'], string> = {
+    web: 'Web search', wikipedia: 'Reference search', youtube: 'YouTube sample', pageReview: 'Page review', ai: 'Local AI',
+  }
 
   if (pendingOpportunities.length > 0) {
     return (
@@ -148,78 +156,52 @@ export function OpportunityScoutSection({
 
   return (
     <section className="research-section opportunity-scout">
-      <h2>YouTube Opportunity Scout</h2>
+      <h2>Run automatic research</h2>
       <p className="tab-explanation">
-        Search real, recent YouTube videos in your niche for evidence-backed content opportunities — topics, titles,
-        hooks, and thumbnail ideas grounded in actual public metrics, not guesses. Uses the official YouTube Data
-        API and your local Ollama model; nothing is added to your Ideas list until you review and accept it.
+        Enter one idea to research it, or let Farming discover ideas automatically. It searches lightweight web and
+        reference results, reviews a few selected pages, samples only a handful of YouTube videos, ranks the ideas,
+        and saves everything for future projects.
       </p>
       <label className="field">
-        Niche or seed topic
+        Idea or niche to research
         <input
           value={config.seedTopic}
           onChange={(event) => patchConfig({ seedTopic: event.target.value })}
-          placeholder="e.g. beginner deep water culture hydroponics"
+          placeholder="e.g. simple hydroponics for apartment beginners"
           maxLength={200}
         />
       </label>
-      <div className="opportunity-scout-config-row">
-        <label className="field">
-          Country/region
-          <input
-            value={config.regionCode}
-            onChange={(event) => patchConfig({ regionCode: event.target.value.toUpperCase() })}
-            maxLength={2}
-            placeholder="US"
-          />
-        </label>
-        <label className="field">
-          Language
-          <input
-            value={config.languageCode}
-            onChange={(event) => patchConfig({ languageCode: event.target.value.toLowerCase() })}
-            maxLength={5}
-            placeholder="en"
-          />
-        </label>
-        <label className="field">
-          Published within (days)
-          <input
-            type="number"
-            min={1}
-            max={365}
-            value={config.publishedAfterDays}
-            onChange={(event) => patchConfig({ publishedAfterDays: Number(event.target.value) })}
-          />
-        </label>
-        <label className="field">
-          Search phrases
-          <input
-            type="number"
-            min={1}
-            max={5}
-            value={config.maxSearchPhrases}
-            onChange={(event) => patchConfig({ maxSearchPhrases: Number(event.target.value) })}
-          />
-        </label>
-        <label className="field">
-          Results per phrase
-          <input
-            type="number"
-            min={1}
-            max={25}
-            value={config.maxResultsPerPhrase}
-            onChange={(event) => patchConfig({ maxResultsPerPhrase: Number(event.target.value) })}
-          />
-        </label>
-      </div>
       <p className="field-hint">
-        Uses up to {config.maxSearchPhrases} YouTube searches per run (~{config.maxSearchPhrases * 100} of your daily
-        quota units) plus two local Ollama calls. Requires YOUTUBE_API_KEY to be set on the local server.
+        YouTube use is capped at one search and five videos. Broad web search activates when BRAVE_SEARCH_API_KEY is
+        available; Wikipedia and the local AI engine work without it.
       </p>
-      <button type="button" onClick={() => onFindOpportunities(config)} disabled={!canSubmit}>
-        {finding ? 'Finding opportunities...' : 'Find opportunities'}
-      </button>
+      <div className="generated-review-toolbar">
+        <button type="button" onClick={() => onFindOpportunities(config, 'topic')} disabled={!canSubmit}>
+          {finding ? 'Researching...' : 'Research this idea'}
+        </button>
+        <button type="button" onClick={() => onFindOpportunities(config, 'discover')} disabled={!canSubmit}>
+          Discover popular ideas automatically
+        </button>
+      </div>
+      {researchJob && (
+        <div className="research-progress" aria-live="polite">
+          <div className="research-progress-header">
+            <strong>{researchJob.stage}</strong>
+            <span>{researchJob.progress}% · {researchJob.etaSeconds === null ? 'Calculating ETA' : researchJob.etaSeconds === 0 ? 'Complete' : `about ${researchJob.etaSeconds}s remaining`}</span>
+          </div>
+          <progress value={researchJob.progress} max={100}>{researchJob.progress}%</progress>
+          <p className="field-hint">{researchJob.detail}</p>
+          <ul className="research-provider-status">
+            {Object.entries(researchJob.providers).map(([provider, state]) => (
+              <li key={provider}>{providerLabels[provider as keyof ResearchJob['providers']]}: {state}</li>
+            ))}
+          </ul>
+          {researchJob.state === 'completed' && researchJob.result && (
+            <p className="success-text">Saved {researchJob.result.createdIdeaIds.length} ranked ideas. Open Ideas to approve or reject them.</p>
+          )}
+          {researchJob.error && <p className="error-text">{researchJob.error}</p>}
+        </div>
+      )}
       {findError && <p className="error-text">{findError}</p>}
     </section>
   )

@@ -164,10 +164,35 @@ export type OpportunityScoutConfig = {
   maxResultsPerPhrase: number
 }
 
+export type ResearchJob = {
+  id: string
+  state: 'queued' | 'running' | 'completed' | 'failed'
+  stage: string
+  detail: string
+  progress: number
+  completedUnits: number
+  totalUnits: number
+  etaSeconds: number | null
+  startedAt: string
+  updatedAt: string
+  providers: Record<'web' | 'wikipedia' | 'youtube' | 'pageReview' | 'ai', 'waiting' | 'running' | 'completed' | 'skipped' | 'failed'>
+  result?: { project: Project; createdIdeaIds: string[]; researchRunId: string }
+  error?: string
+}
+
+export function startResearchJob(projectId: string, input: { topic: string; mode: 'topic' | 'discover' }): Promise<ResearchJob> {
+  return request(`/projects/${projectId}/research/jobs`, { method: 'POST', body: JSON.stringify(input) })
+}
+
+export function getResearchJob(projectId: string, jobId: string): Promise<ResearchJob> {
+  return request(`/projects/${projectId}/research/jobs/${jobId}`)
+}
+
 export type FindOpportunitiesResult = {
   ideas: Idea[]
   phrasesWithNoResults: string[]
   phraseErrors: { phrase: string; error: string }[]
+  project: Project
 }
 
 export function findOpportunities(projectId: string, config: OpportunityScoutConfig): Promise<FindOpportunitiesResult> {

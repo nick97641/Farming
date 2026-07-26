@@ -25,6 +25,7 @@ type Props = {
   importError: string | null
   onDeleteJob: (jobId: string, label: string) => void
   onGenerateVariations: (jobId: string, count: number) => void
+  onGenerateApprovalSet: (jobIds: string[]) => void
   generatingJobId: string | null
   generateProgressLabel: string | null
   generateError: string | null
@@ -38,23 +39,23 @@ type Props = {
   onChangeSelectedImageJobId: (jobId: string | null) => void
 }
 
-function createBlankJob(designBrief: DesignBrief | null): ImageJob {
+function createBlankJob(designBrief: DesignBrief | null, option?: { label: string; prompt: string; purpose: ImageJob['purpose'] }): ImageJob {
   const now = new Date().toISOString()
   return {
     id: crypto.randomUUID(),
     sourceDesignBriefUpdatedAt: designBrief?.updatedAt ?? null,
-    purpose: 'custom',
-    label: designBrief?.title ?? '',
+    purpose: option?.purpose ?? 'custom',
+    label: option?.label ?? designBrief?.title ?? '',
     status: 'draft',
-    prompt: designBrief?.visualDirection ?? '',
+    prompt: option?.prompt ?? designBrief?.visualDirection ?? '',
     negativePrompt: '',
     width: 1024,
     height: 1024,
-    sourceType: 'imported',
+    sourceType: option ? 'generated' : 'imported',
     output: null,
     originalFilename: null,
     policyVersion: ENRICHMENT_POLICY_VERSION,
-    userDescription: designBrief?.visualDirection ?? '',
+    userDescription: option?.prompt ?? designBrief?.visualDirection ?? '',
     structuredRequirements: createDefaultStructuredRequirements(),
     enrichmentRecipe: null,
     destination: null,
@@ -81,6 +82,7 @@ export function ImageGenerationTab({
   importError,
   onDeleteJob,
   onGenerateVariations,
+  onGenerateApprovalSet,
   generatingJobId,
   generateProgressLabel,
   generateError,
@@ -100,6 +102,20 @@ export function ImageGenerationTab({
     const blank = createBlankJob(designBrief)
     onChangeImageJobs([...imageJobs, blank])
     setEditingId(blank.id)
+  }
+
+  function handleCreateMediaSet() {
+    if (!designBrief) return
+    const context = `${designBrief.title}. Audience: ${designBrief.audience}. Problem: ${designBrief.problem}. Outcome: ${designBrief.outcome}. Platform: ${designBrief.platform || designBrief.format}. Visual direction: ${designBrief.visualDirection}`
+    const groupId = crypto.randomUUID()
+    const options: { label: string; purpose: ImageJob['purpose']; prompt: string }[] = [
+      { label: `${designBrief.title} — hero`, purpose: 'youtube-thumbnail', prompt: `${context}. Create a bold hero image with one clear focal point and generous title-safe space.` },
+      { label: `${designBrief.title} — process`, purpose: 'internal-illustration', prompt: `${context}. Show the main process or setup clearly as an educational visual without unrequested text.` },
+      { label: `${designBrief.title} — close detail`, purpose: 'internal-illustration', prompt: `${context}. Create a detailed close-up emphasizing the key problem and successful outcome.` },
+      { label: `${designBrief.title} — alternate`, purpose: 'custom', prompt: `${context}. Create an alternate composition and viewpoint for comparison while preserving factual requirements.` },
+    ]
+    const jobs = options.map((option) => ({ ...createBlankJob(designBrief, option), variationGroupId: groupId }))
+    onChangeImageJobs([...imageJobs, ...jobs])
   }
 
   function handleUpdate(updated: ImageJob) {
@@ -162,6 +178,16 @@ export function ImageGenerationTab({
 
       <button type="button" onClick={handleCreate}>
         Create image job
+      </button>
+      <button type="button" onClick={handleCreateMediaSet} disabled={!designBrief}>
+        Compile image approval set from brief
+      </button>
+      <button
+        type="button"
+        onClick={() => onGenerateApprovalSet(imageJobs.filter((job) => job.sourceType === 'generated' && job.output === null).map((job) => job.id))}
+        disabled={generatingJobId !== null || !imageJobs.some((job) => job.sourceType === 'generated' && job.output === null)}
+      >
+        Generate all pending approval images
       </button>
 
       {imageJobs.length === 0 && <p className="empty-hint">No image jobs yet — create one above.</p>}

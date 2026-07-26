@@ -4,19 +4,22 @@ import { ConfidentTextList } from '../../components/ConfidentTextList'
 import { EditableStringList } from '../../components/EditableStringList'
 import { KeywordClassificationEditor } from '../../components/KeywordClassificationEditor'
 import type { OpportunityScoutConfig } from '../../lib/api'
+import type { ResearchJob } from '../../lib/api'
 import { OpportunityScoutSection } from './OpportunityScoutSection'
 import { SourceLinksEditor } from './SourceLinksEditor'
 import { VerifiedFactsEditor } from './VerifiedFactsEditor'
 
 type Props = {
+  projectTopic: string
   research: Research
   onChangeResearch: (research: Research) => void
   onOrganize: () => void
   organizing: boolean
   organizeError: string | null
-  onFindOpportunities: (config: OpportunityScoutConfig) => void
+  onFindOpportunities: (config: OpportunityScoutConfig, mode?: 'topic' | 'discover') => void
   findingOpportunities: boolean
   findOpportunitiesError: string | null
+  researchJob: ResearchJob | null
   pendingOpportunities: Idea[]
   opportunityPhrasesWithNoResults: string[]
   opportunityPhraseErrors: { phrase: string; error: string }[]
@@ -27,6 +30,7 @@ type Props = {
 }
 
 export function ResearchTab({
+  projectTopic,
   research,
   onChangeResearch,
   onOrganize,
@@ -35,6 +39,7 @@ export function ResearchTab({
   onFindOpportunities,
   findingOpportunities,
   findOpportunitiesError,
+  researchJob,
   pendingOpportunities,
   opportunityPhrasesWithNoResults,
   opportunityPhraseErrors,
@@ -53,6 +58,54 @@ export function ResearchTab({
 
   return (
     <div className="research-tab">
+      <OpportunityScoutSection
+        projectTopic={projectTopic}
+        onFindOpportunities={onFindOpportunities}
+        finding={findingOpportunities}
+        findError={findOpportunitiesError}
+        researchJob={researchJob}
+        pendingOpportunities={pendingOpportunities}
+        phrasesWithNoResults={opportunityPhrasesWithNoResults}
+        phraseErrors={opportunityPhraseErrors}
+        onAccept={onAcceptOpportunity}
+        onAcceptAll={onAcceptAllOpportunities}
+        onDiscard={onDiscardOpportunity}
+        onDiscardAll={onDiscardAllOpportunities}
+      />
+
+      <section className="research-section ai-section">
+        <h2>Research library</h2>
+        <p className="tab-explanation">
+          Every automatic research run is saved here and automatically used when Farming generates future ideas and
+          content.
+        </p>
+        {research.library.length > 0 && (
+          <div className="research-library">
+            <h3>Research library ({research.library.length})</h3>
+            {research.library.map((run) => (
+              <details key={run.id} className="research-picker-details">
+                <summary>{run.topic} — {new Date(run.createdAt).toLocaleString()}</summary>
+                <p>{run.summary}</p>
+                <p className="field-hint">Saved in {run.relativePath}</p>
+                {run.findings.length > 0 && <ul>{run.findings.map((finding) => <li key={finding}>{finding}</li>)}</ul>}
+                <p>{run.sources.length} saved source{run.sources.length === 1 ? '' : 's'}</p>
+                {run.sources.length > 0 && (
+                  <ul className="idea-source-list">
+                    {run.sources.map((source) => (
+                      <li key={source.url}>
+                        <a href={source.url} target="_blank" rel="noreferrer">{source.title}</a> — {source.channelTitle}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </details>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <details className="research-picker-details">
+        <summary>Manual research tools</summary>
       <section className="research-section">
         <h2>Your research</h2>
 
@@ -167,19 +220,7 @@ export function ResearchTab({
           onChange={(estimatedOpportunities) => patchAiExtracted({ estimatedOpportunities })}
         />
       </section>
-
-      <OpportunityScoutSection
-        onFindOpportunities={onFindOpportunities}
-        finding={findingOpportunities}
-        findError={findOpportunitiesError}
-        pendingOpportunities={pendingOpportunities}
-        phrasesWithNoResults={opportunityPhrasesWithNoResults}
-        phraseErrors={opportunityPhraseErrors}
-        onAccept={onAcceptOpportunity}
-        onAcceptAll={onAcceptAllOpportunities}
-        onDiscard={onDiscardOpportunity}
-        onDiscardAll={onDiscardAllOpportunities}
-      />
+      </details>
     </div>
   )
 }

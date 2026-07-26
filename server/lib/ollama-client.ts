@@ -242,6 +242,10 @@ export function buildGenerateIdeasPrompt(input: { topic: string; research: Resea
     'Verified facts',
     research.verifiedFacts.map((fact) => fact.text),
   )
+  for (const run of research.library) {
+    lines.push('', `Saved automatic research (${run.createdAt}) — ${run.topic}:`, run.summary)
+    if (run.findings.length > 0) lines.push(...run.findings.map((finding) => `- ${finding}`))
+  }
 
   return lines.join('\n')
 }
@@ -358,6 +362,7 @@ export function buildGenerateContentPrompt(input: {
     `Problem: ${designBrief.problem.trim() || '(none provided)'}`,
     `Outcome: ${designBrief.outcome.trim() || '(none provided)'}`,
     `Format: ${designBrief.format.trim() || '(none provided)'}`,
+    `Platform: ${designBrief.platform?.trim() || '(none provided)'}`,
     '',
     'Content requirements:',
     ...(designBrief.contentRequirements.length > 0
@@ -382,6 +387,11 @@ export function buildGenerateContentPrompt(input: {
     '',
     'Verified facts:',
     ...(research.verifiedFacts.length > 0 ? research.verifiedFacts.map((fact) => `- ${fact.text}`) : ['(none provided)']),
+    '',
+    'Saved automatic research:',
+    ...(research.library.length > 0
+      ? research.library.flatMap((run) => [`${run.createdAt} — ${run.topic}: ${run.summary}`, ...run.findings.map((finding) => `- ${finding}`)])
+      : ['(none provided)']),
   ].join('\n')
 }
 

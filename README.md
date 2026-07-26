@@ -13,10 +13,17 @@ date, platform/channel, and notes — with safe legacy-project migration,
 publication details surfaced in the read-only Production Summary, and safe
 clickable HTTP/HTTPS publication links.
 
+Version 0.5.0 adds an autonomous research-to-production workflow: live
+background progress and ETA, low-data multi-source retrieval, permanent
+research reports, evidence-based idea ranking, automatic brief creation,
+platform selection, and multi-image approval sets.
+
 Farming is a local-first content production workspace for gardening and
 hydroponics projects. The minimal local version supports:
 
 - research-based idea generation with Ollama;
+- autonomous multi-source research using Wikipedia, optional Brave Search,
+  a small YouTube corroboration sample, and robots-aware bounded page review;
 - YouTube script and PDF draft generation with Ollama, with the generated PDF
   draft editable and exportable as a PDF from the Content tab;
 - local image generation through the Draw Things HTTP API; and
@@ -106,12 +113,37 @@ The backend reads these environment variables:
 | `OLLAMA_HOST` | Ollama base URL | `http://localhost:11434` |
 | `OLLAMA_MODEL` | Ollama model used for generation | `qwen2.5:14b-instruct` |
 | `DRAW_THINGS_URL` | Draw Things HTTP API base URL | `http://127.0.0.1:7860` |
+| `YOUTUBE_API_KEY` | Optional five-video interest sample during research | disabled |
+| `BRAVE_SEARCH_API_KEY` | Optional broad web search and selected-page review | disabled |
 
 Set overrides on the backend process. For example:
 
 ```sh
 OLLAMA_MODEL=my-local-model DRAW_THINGS_URL=http://127.0.0.1:7860 npm run server
 ```
+
+## Autonomous workflow
+
+1. Enter an idea or niche in Research, or choose autonomous discovery.
+2. Watch the live task stages, completed-work progress, provider status, and
+   rolling ETA. Each completed run is saved under the project's `research/`
+   folder and added to its reusable Research Library.
+3. Open Ideas. Farming saves evidence-backed drafts ordered by comparative
+   interest score; approve and select one for production or reject/delete it.
+4. Selecting an idea automatically creates a populated Design Brief. Choose
+   the destination platform and review the proposed title, audience, problem,
+   and outcome.
+5. In Image Generation, compile a four-image approval set from the brief, then
+   generate all pending options through Draw Things. Select the preferred
+   completed image; rejected options can be deleted.
+6. Continue through Content, Video, Products, Assets, and Export. Saved
+   research and approved project artifacts remain available for future
+   generation.
+
+Brave Search is optional but recommended for broad web discovery. Without its
+key, Farming still uses Wikipedia, local AI synthesis, and a small YouTube
+sample when a YouTube key is configured. Secrets belong in `.env.local`, which
+is ignored by Git.
 
 ## Minimal workflow smoke test
 

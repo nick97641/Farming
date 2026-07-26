@@ -2,31 +2,13 @@ import { useState } from 'react'
 
 import type { DesignBrief, Idea } from '../../../shared/schema/project'
 import { EditableStringList } from '../../components/EditableStringList'
-import { CONTENT_TYPE_LABELS } from '../../lib/ideaOptions'
+import { createBriefFromIdea } from '../../lib/designBriefOptions'
 
 type Props = {
   ideas: Idea[]
   selectedIdeaId: string | null
   designBrief: DesignBrief | null
   onChangeDesignBrief: (designBrief: DesignBrief | null) => void
-}
-
-function createBriefFromIdea(idea: Idea): DesignBrief {
-  const now = new Date().toISOString()
-  return {
-    sourceIdeaId: idea.id,
-    status: 'draft',
-    title: idea.title,
-    audience: idea.targetAudience,
-    problem: idea.problemSolved,
-    outcome: idea.proposedOutcome,
-    format: CONTENT_TYPE_LABELS[idea.contentType],
-    contentRequirements: [],
-    visualDirection: '',
-    constraints: [],
-    createdAt: now,
-    updatedAt: now,
-  }
 }
 
 export function DesignBriefTab({ ideas, selectedIdeaId, designBrief, onChangeDesignBrief }: Props) {
@@ -137,6 +119,19 @@ export function DesignBriefTab({ ideas, selectedIdeaId, designBrief, onChangeDes
         <label className="field">
           Outcome
           <textarea rows={3} value={designBrief.outcome} onChange={(event) => patch({ outcome: event.target.value })} />
+        </label>
+        <label className="field">
+          Platform
+          <select value={designBrief.platform ?? ''} onChange={(event) => patch({ platform: event.target.value })}>
+            <option value="">Choose platform</option>
+            <option value="YouTube">YouTube</option>
+            <option value="YouTube Shorts">YouTube Shorts</option>
+            <option value="Instagram">Instagram</option>
+            <option value="TikTok">TikTok</option>
+            <option value="Pinterest">Pinterest</option>
+            <option value="Website / blog">Website / blog</option>
+            <option value="Downloadable PDF">Downloadable PDF</option>
+          </select>
         </label>
         <label className="field">
           Format

@@ -8,6 +8,7 @@ type Props = {
   onDuplicate: () => void
   onDelete: () => void
   onSelectForProduction: () => void
+  onApproveAndSelect: () => void
   onRemoveFromProduction: () => void
 }
 
@@ -18,6 +19,7 @@ export function IdeaCard({
   onDuplicate,
   onDelete,
   onSelectForProduction,
+  onApproveAndSelect,
   onRemoveFromProduction,
 }: Props) {
   return (
@@ -28,6 +30,7 @@ export function IdeaCard({
           <span className={`confidence-badge confidence-${idea.confidence}`}>
             support confidence: {idea.confidence}
           </span>
+          {idea.interestScore !== undefined && <span className="idea-selected-badge">Interest {idea.interestScore}/100</span>}
           {isSelectedForProduction && <span className="idea-selected-badge">Selected for production</span>}
         </div>
         <div className="idea-card-meta">
@@ -52,9 +55,13 @@ export function IdeaCard({
             Remove from production
           </button>
         ) : (
-          idea.status === 'approved' && (
+          idea.status === 'approved' ? (
             <button type="button" onClick={onSelectForProduction}>
               Select for production
+            </button>
+          ) : (
+            <button type="button" onClick={onApproveAndSelect}>
+              Approve &amp; select for production
             </button>
           )
         )}

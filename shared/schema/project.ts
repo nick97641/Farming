@@ -75,6 +75,33 @@ export const ConfidentKeywordSetSchema = z.object({
 })
 export type ConfidentKeywordSet = z.infer<typeof ConfidentKeywordSetSchema>
 
+// A durable snapshot created by Automatic Research. The concise findings and
+// source metadata stay in project.json so future generation can use them,
+// while relativePath points to the complete, human-readable Markdown archive.
+export const AutomatedResearchSourceSchema = z.object({
+  sourceType: z.enum(['web', 'wikipedia', 'youtube']).default('youtube'),
+  title: z.string(),
+  url: z.string(),
+  channelTitle: z.string(),
+  publishedAt: z.string(),
+  retrievedAt: z.string(),
+  excerpt: z.string(),
+  interestSignal: z.number().min(0).max(100).optional(),
+})
+export type AutomatedResearchSource = z.infer<typeof AutomatedResearchSourceSchema>
+
+export const AutomatedResearchRunSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  summary: z.string(),
+  findings: z.array(z.string()),
+  sources: z.array(AutomatedResearchSourceSchema),
+  searchPhrases: z.array(z.string()),
+  createdAt: z.string(),
+  relativePath: z.string(),
+})
+export type AutomatedResearchRun = z.infer<typeof AutomatedResearchRunSchema>
+
 // aiExtracted is structurally separate from the user-entered fields above it so
 // the UI can always label AI output as organized/estimated, never as verified fact.
 export const ResearchSchema = z.object({
@@ -94,6 +121,7 @@ export const ResearchSchema = z.object({
     competitorAngles: z.array(ConfidentTextSchema),
   }),
   sources: z.array(SourceLinkSchema),
+  library: z.array(AutomatedResearchRunSchema),
 })
 export type Research = z.infer<typeof ResearchSchema>
 
@@ -259,6 +287,9 @@ export const IdeaSchema = z.object({
   // changed by any code path other than accepting a scout draft.
   youtubeEvidence: YoutubeOpportunityEvidenceSchema.nullable(),
   publication: IdeaPublicationInfoSchema,
+  // Deterministic 0-100 ranking from retrieved source coverage and relevance.
+  // Older/manual ideas legitimately have no score.
+  interestScore: z.number().min(0).max(100).optional(),
 })
 export type Idea = z.infer<typeof IdeaSchema>
 
@@ -277,6 +308,7 @@ export const DesignBriefSchema = z.object({
   problem: z.string(),
   outcome: z.string(),
   format: z.string(),
+  platform: z.string().optional(),
   contentRequirements: z.array(z.string()),
   visualDirection: z.string(),
   constraints: z.array(z.string()),
@@ -747,6 +779,7 @@ export function createEmptyProject(input: { id: string; title: string; topic: st
         competitorAngles: [],
       },
       sources: [],
+      library: [],
     },
     ideas: [],
     selectedIdeaId: null,
