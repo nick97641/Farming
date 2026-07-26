@@ -145,6 +145,12 @@ function normalizeIdeaPublicationInfo(raw: unknown): IdeaPublicationInfo {
 function normalizeIdea(raw: unknown): unknown {
   const idea = isRecord(raw) ? raw : {}
   const createdAt = typeof idea.createdAt === 'string' ? idea.createdAt : new Date().toISOString()
+  const recoveredInterestScore =
+    typeof idea.interestScore === 'number' && idea.interestScore >= 0 && idea.interestScore <= 100
+      ? idea.interestScore
+      : typeof idea.notes === 'string'
+        ? Number(idea.notes.match(/Interest ranking: (\d{1,3})\/100/)?.[1] ?? Number.NaN)
+        : Number.NaN
 
   return {
     id: typeof idea.id === 'string' ? idea.id : '',
@@ -174,6 +180,9 @@ function normalizeIdea(raw: unknown): unknown {
         : 'idea',
     youtubeEvidence: normalizeYoutubeOpportunityEvidence(idea.youtubeEvidence),
     publication: normalizeIdeaPublicationInfo(idea.publication),
+    ...(Number.isFinite(recoveredInterestScore) && recoveredInterestScore >= 0 && recoveredInterestScore <= 100
+      ? { interestScore: recoveredInterestScore }
+      : {}),
   }
 }
 

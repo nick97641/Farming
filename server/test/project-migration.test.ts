@@ -864,3 +864,12 @@ test('normalizeLegacyProject defaults publication to the all-empty default when 
   const normalized = normalizeLegacyProject(raw) as { ideas: Record<string, unknown>[] }
   assert.deepEqual(normalized.ideas[0].publication, { url: '', publishedAt: '', platform: '', notes: '' })
 })
+
+test('normalizeLegacyProject preserves or recovers an automatic-research interest score', () => {
+  const raw = {
+    id: 'legacy-interest-score', research: {},
+    ideas: [{ id: 'idea-score', notes: 'Interest ranking: 82/100, calculated from source relevance.' }],
+  }
+  const normalized = normalizeLegacyProject(raw) as { ideas: { interestScore?: number }[] }
+  assert.equal(normalized.ideas[0].interestScore, 82)
+})
